@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fish Audio TTS</string>
+    <string name="title_activity_main">Fish Audio TTS</string>
+    <string name="package_name">com.fishaudio.tts</string>
+    <string name="custom_url_scheme">com.fishaudio.tts</string>
+</resources>
