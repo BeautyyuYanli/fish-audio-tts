@@ -57,7 +57,7 @@ class FishSynthesizerTest {
         assertEquals(profile.referenceId, body.getString("reference_id"))
         assertEquals("opus", body.getString("format"))
         assertEquals(48000, body.getInt("sample_rate"))
-        assertEquals(32000, body.getInt("opus_bitrate"))
+        assertEquals(-1000, body.getInt("opus_bitrate"))
         assertEquals("en-US", body.getString("language"))
         assertEquals(1.2, body.getJSONObject("prosody").getDouble("speed"), 0.0001)
         assertEquals(-3, body.getJSONObject("prosody").getInt("volume"))
@@ -143,6 +143,7 @@ class FishSynthesizerTest {
         val body = JSONObject(request.body.readUtf8())
         assertNull(request.getHeader("model"))
         assertEquals(setOf("text", "reference_id", "format", "sample_rate", "opus_bitrate"), body.keys().asSequence().toSet())
+        assertEquals(-1000, body.getInt("opus_bitrate"))
         assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
     }
 

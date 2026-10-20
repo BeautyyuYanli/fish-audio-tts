@@ -56,8 +56,8 @@ class FishSynthesizer(
             // Prefixes apply once in the native synthesis path, including previews and Activity-free system calls.
             val body = JSONObject(profile.parameters.toString()).put("text", profile.prefixText + text).put("reference_id", profile.referenceId)
                 .put("format", "opus").put("sample_rate", OggOpusReader.SAMPLE_RATE)
-            // Bitrate is transport policy; preserve an explicitly configured upstream bitrate.
-            if (!body.has("opus_bitrate")) body.put("opus_bitrate", 32000)
+            // Let Fish choose omitted bitrates; preserve a profile's explicit bitrate.
+            if (!body.has("opus_bitrate")) body.put("opus_bitrate", -1000)
             if (!language.isNullOrBlank()) body.put("language", language)
             if (speechRate != null) {
                 val prosody = body.optJSONObject("prosody") ?: JSONObject()

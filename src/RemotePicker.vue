@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { CatalogOption, CatalogPage } from './catalog'
 
 const props = withDefaults(defineProps<{
@@ -19,6 +19,8 @@ const emit = defineEmits<{
 }>()
 const details = ref<HTMLDetailsElement>()
 const items = ref<CatalogOption[]>([])
+// Reverse all loaded upstream pages together; local defaults stay at the beginning.
+const choices = computed(() => [...props.initialOptions, ...[...items.value].reverse()])
 const loading = ref(false)
 const error = ref('')
 const hasMore = ref(false)
@@ -33,7 +35,7 @@ function reset() {
   error.value = ''
   hasMore.value = false
   nextPage = 1
-  items.value = [...props.initialOptions]
+  items.value = []
 }
 
 async function loadNext() {
@@ -81,13 +83,13 @@ onUnmounted(() => { disposed = true; reset() })
     <div class="remote-content" :aria-busy="loading">
       <p v-if="loading" class="notice" role="status">Loading…</p>
       <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-      <div v-if="items.length" class="remote-options">
-        <button v-for="item in items" :key="item.value" class="remote-option" type="button" :data-option-value="item.value" :aria-pressed="item.value === modelValue" :disabled="disabled" @click="choose(item)">
+      <div v-if="choices.length" class="remote-options">
+        <button v-for="item in choices" :key="item.value" class="remote-option" type="button" :data-option-value="item.value" :aria-pressed="item.value === modelValue" :disabled="disabled" @click="choose(item)">
           <span class="option-copy">{{ item.label }}<span v-if="item.label !== item.value" class="option-id">{{ item.value }}</span></span>
           <span v-if="item.value === modelValue" class="badge">Selected</span>
         </button>
       </div>
-      <p v-if="!loading && !error && !items.length" class="notice">{{ emptyText }}</p>
+      <p v-if="!loading && !error && !choices.length" class="notice">{{ emptyText }}</p>
       <p v-if="error" class="action-stack"><button class="button button-block" type="button" :disabled="disabled || loading" @click="loadNext">Retry</button></p>
       <p v-else-if="hasMore" class="action-stack"><button class="button button-block" type="button" :disabled="disabled || loading" @click="loadNext">Load more</button></p>
     </div>

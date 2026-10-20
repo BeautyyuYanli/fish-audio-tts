@@ -329,7 +329,7 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
         <summary class="disclosure">Generation rules</summary>
         <p class="helper">System values override table values. Nested prosody values are merged. Omitted values use upstream defaults.</p>
         <p class="helper">Android supplies a speech rate, including its default. Pitch adjustment is unavailable; Android controls playback volume.</p>
-        <p class="helper">Speech text is sent to Fish Audio using your saved key. Audio is streamed using Opus at 32 kbps by default and decoded to 48,000 Hz mono PCM16. Set opus_bitrate in generation parameters to change the bitrate.</p>
+        <p class="helper">Speech text is sent to Fish Audio using your saved key. Audio is streamed using Opus with automatic bitrate by default and decoded to 48,000 Hz mono PCM16. Set opus_bitrate in generation parameters to change the bitrate.</p>
         <p class="helper">Do not put text, reference_id, references, model, format or sample_rate in generation parameters.</p>
         <p class="helper"><a href="https://fish.audio" target="_blank" rel="noopener noreferrer">Find a voice / Reference ID</a></p>
         <p class="helper"><a href="https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech" target="_blank" rel="noopener noreferrer">Fish Audio generation parameters</a></p>

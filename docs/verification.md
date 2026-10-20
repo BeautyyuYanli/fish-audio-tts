@@ -1,5 +1,11 @@
 # Verification
 
+The current source sends `opus_bitrate: -1000` when a profile omits its bitrate, preserving explicit profile values. Remote voice/model choices display in reverse upstream order across all loaded pages, with the local **Upstream default** option first.
+
+For these changes, `npm run test:ui` passed all 9 browser checks, including reverse model order and combined voice-page order. Capacitor sync, the Android debug build and all 19 `FishSynthesizerTest` instrumentation checks passed on the original API 35 emulator. The native fixtures verify the outgoing automatic value, preservation of an explicit bitrate and decoding with the actual Android codec. No live Fish request was made for automatic mode.
+
+The full release record below, including its test counts and APK fingerprint, describes commit `7e8ca75`, before these changes, with an explicit 32 kbps default.
+
 Version 1.1.1 (version code 10) was verified locally on 2026-10-20 with frontend/Android builds, parser/protocol tests and integration checks on the original `FishTts_API_35` emulator. It combines the styled settings panel and live catalogs with progressive Ogg Opus transport and Android MediaCodec decoding. The panel uses primitive tokens, semantic role aliases and ordinary HTML controls. Global configuration starts collapsed; each voice saves independently; a radio inside each row selects the saved system default. Checks cover draft isolation, narrow-screen layout, real Android keyboard behavior, native persistence, preview controls and asynchronous catalog behavior.
 
 A supplied Fish credential was delivered to native code through one-shot sockets without placing it in source, arguments, environment variables or browser storage. Both live catalog paths and their panel/native bridge passed. Real Fish Opus synthesis through Android's system TTS client also passed, returning non-silent 48 kHz mono PCM16 and a WAV output file without opening an Activity. Physical-device audible playback remains unverified.
