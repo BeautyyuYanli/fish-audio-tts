@@ -4,6 +4,13 @@ The current source sends `opus_bitrate: -1000` when a profile omits its bitrate,
 
 For these changes, `npm run test:ui` passed all 9 browser checks, including reverse model order and combined voice-page order. Capacitor sync, the Android debug build and all 19 `FishSynthesizerTest` instrumentation checks passed on the original API 35 emulator. The native fixtures verify the outgoing automatic value, preservation of an explicit bitrate and decoding with the actual Android codec. No live Fish request was made for automatic mode.
 
+Version 1.1.2 (version code 11) packages these changes. `npm run android:debug` passed the frontend type check/build, Capacitor sync and native debug build. APK Signature Scheme v2 verification passed, and a scan of all APK entries found no Fish credential-pattern matches. Ordinary `adb install -r` upgraded code 10 to code 11 on the original API 35 emulator; the encrypted native configuration remained byte-for-byte unchanged.
+
+- Latest APK: `android/app/build/outputs/apk/debug/app-debug.apk`
+- Version: 1.1.2 (version code 11)
+- Size: 4,793,298 bytes
+- SHA-256: `bcad5e9e7aaabbe7e1ce7646889795301956d976b7e9c8200659e851928f1e04`
+
 The full release record below, including its test counts and APK fingerprint, describes commit `7e8ca75`, before these changes, with an explicit 32 kbps default.
 
 Version 1.1.1 (version code 10) was verified locally on 2026-10-20 with frontend/Android builds, parser/protocol tests and integration checks on the original `FishTts_API_35` emulator. It combines the styled settings panel and live catalogs with progressive Ogg Opus transport and Android MediaCodec decoding. The panel uses primitive tokens, semantic role aliases and ordinary HTML controls. Global configuration starts collapsed; each voice saves independently; a radio inside each row selects the saved system default. Checks cover draft isolation, narrow-screen layout, real Android keyboard behavior, native persistence, preview controls and asynchronous catalog behavior.
