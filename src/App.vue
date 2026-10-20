@@ -262,7 +262,7 @@ onUnmounted(() => {
 
     <p>System generation values take priority over table values. Parameters missing from both are omitted so Fish Audio can apply its defaults. Nested prosody values are merged.</p>
     <p>Android supplies a speech rate, including its default rate. It overrides the row's speed after conversion from percent to a multiplier. Fish supports 0.5–2.0; unsupported values are sent to Fish for validation. Pitch adjustment is unavailable; Android controls playback volume.</p>
-    <p>Audio output is managed by the engine: 24,000 Hz, mono, 16-bit PCM extracted from WAV. Do not put text, reference_id, references, model, format or sample_rate in generation parameters.</p>
+    <p>Audio is streamed using Opus at 32 kbps by default. Set opus_bitrate in generation parameters to change the bitrate. Do not put text, reference_id, references, model, format or sample_rate in generation parameters.</p>
     <p role="status" aria-live="polite">{{ message }}</p>
     <p v-if="dirtyVoices">Unsaved voice changes. Save the voice list before starting a preview.</p>
     <p v-if="apiKey">Unsaved API key. Save it before starting a preview.</p>
