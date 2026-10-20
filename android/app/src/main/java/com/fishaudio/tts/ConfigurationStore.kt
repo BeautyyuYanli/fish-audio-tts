@@ -42,6 +42,24 @@ class ConfigurationStore(context: Context) {
         writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId))
     }
 
+    /** Read-modify-write by stable profile ID; never accept another editor's draft snapshot. */
+    fun saveVoice(voice: VoiceProfile): EngineConfiguration = synchronized(lock) {
+        voice.validate()
+        val previous = readLocked()
+        val index = previous.voices.indexOfFirst { it.id == voice.id }
+        require(index >= 0 || previous.voices.size < 50) { "Save at most 50 voice profiles." }
+        val voices = previous.voices.toMutableList()
+        if (index >= 0) voices[index] = voice else voices.add(voice)
+        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId))
+    }
+
+    /** Removal affects one persisted profile; EngineConfiguration supplies the default fallback. */
+    fun removeVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
+        val previous = readLocked()
+        require(previous.voices.any { it.id == voiceId }) { "Select a saved voice to remove." }
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices.filterNot { it.id == voiceId }, previous.defaultVoiceId))
+    }
+
     fun saveDefaultVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         require(previous.voices.any { it.id == voiceId }) { "Select a saved voice as the system default." }

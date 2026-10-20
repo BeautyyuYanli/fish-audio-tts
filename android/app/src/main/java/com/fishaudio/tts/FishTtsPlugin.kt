@@ -13,15 +13,23 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Settings bridge and an ordinary TextToSpeech client for previews of our registered engine.
  * Preview ownership stays on the main thread; generation IDs discard late initialization/listener
  * messages after stop, replacement, or Activity destruction. The service owns all synthesis.
  * Credentials are write-only across the bridge and never included in events or rejection details.
+ * Catalog calls run on OkHttp workers, are cancelled on key changes/destruction, and own no TTS state.
  */
 @CapacitorPlugin(name = "FishTts")
 class FishTtsPlugin : Plugin() {
@@ -29,6 +37,9 @@ class FishTtsPlugin : Plugin() {
     private var tts: TextToSpeech? = null
     private var generation = 0
     private var pending: PluginCall? = null
+    private val catalog = FishCatalogClient()
+    private val catalogCalls = ConcurrentHashMap<Call, PluginCall>()
+    @Volatile private var catalogDestroyed = false
     @Volatile private var previewState = "idle"
     @Volatile private var previewMessage = "No preview yet."
 
@@ -42,6 +53,7 @@ class FishTtsPlugin : Plugin() {
     fun saveApiKey(call: PluginCall) {
         try {
             val config = ConfigurationStore(context).saveApiKey(call.getString("apiKey") ?: "")
+            cancelCatalogCalls()
             call.resolve(publicConfiguration(config))
         } catch (error: IllegalArgumentException) {
             call.reject(error.message ?: "Invalid configuration.")
@@ -55,22 +67,39 @@ class FishTtsPlugin : Plugin() {
 
     @PluginMethod
     fun deleteApiKey(call: PluginCall) {
-        try { call.resolve(publicConfiguration(ConfigurationStore(context).deleteApiKey())) }
+        try {
+            val config = ConfigurationStore(context).deleteApiKey()
+            cancelCatalogCalls()
+            call.resolve(publicConfiguration(config))
+        }
         catch (_: Exception) { call.reject("Unable to delete the API key. Please try again.") }
     }
 
     @PluginMethod
-    fun saveVoices(call: PluginCall) {
+    fun saveVoice(call: PluginCall) {
         try {
-            val array = call.getArray("voices") ?: throw IllegalArgumentException("Provide a voice list.")
-            val voices = (0 until array.length()).map { VoiceProfile.fromJson(array.getJSONObject(it)) }
-            call.resolve(publicConfiguration(ConfigurationStore(context).saveVoices(voices)))
+            val json = call.getObject("voice") ?: throw IllegalArgumentException("Provide a voice profile.")
+            val voice = VoiceProfile.fromJson(json)
+            val config = ConfigurationStore(context).saveVoice(voice)
+            call.resolve(publicConfiguration(config).put("savedVoiceId", voice.id))
         } catch (error: IllegalArgumentException) {
             call.reject(error.message ?: "Invalid voice configuration.")
         } catch (_: org.json.JSONException) {
-            call.reject("Each voice must contain a Reference ID and a JSON object of generation parameters.")
+            call.reject("Provide a Reference ID and a JSON object of generation parameters.")
         } catch (_: Exception) {
-            call.reject("Unable to save voices. Please try again.")
+            call.reject("Unable to save this voice. Please try again.")
+        }
+    }
+
+    @PluginMethod
+    fun removeVoice(call: PluginCall) {
+        try {
+            val id = call.getString("voiceId") ?: throw IllegalArgumentException("Select a saved voice to remove.")
+            call.resolve(publicConfiguration(ConfigurationStore(context).removeVoice(id)))
+        } catch (error: IllegalArgumentException) {
+            call.reject(error.message ?: "Invalid voice profile.")
+        } catch (_: Exception) {
+            call.reject("Unable to remove this voice. Please try again.")
         }
     }
 
@@ -83,6 +112,52 @@ class FishTtsPlugin : Plugin() {
             call.reject(error.message ?: "Invalid default voice.")
         } catch (_: Exception) {
             call.reject("Unable to save the default voice. Please try again.")
+        }
+    }
+
+    @PluginMethod
+    fun getSynthesisModels(call: PluginCall) {
+        queryCatalog(call, catalog.modelsCall()) { response -> JSObject().put("models", JSONArray(catalog.readModels(response))) }
+    }
+
+    @PluginMethod
+    fun getOwnVoices(call: PluginCall) {
+        val page = call.getInt("pageNumber") ?: 1
+        val request = try { catalog.voicesCall(ConfigurationStore(context).read().apiKey, page) }
+        catch (error: IllegalArgumentException) { call.reject(error.message ?: "Invalid voice catalog request."); return }
+        catch (_: Exception) { call.reject("Unable to read the saved API key."); return }
+        queryCatalog(call, request) { response ->
+            val result = catalog.readVoices(response, page)
+            JSObject().put("voices", JSONArray(result.voices.map { JSONObject().put("id", it.id).put("title", it.title) }))
+                .put("hasMore", result.hasMore)
+        }
+    }
+
+    private fun queryCatalog(call: PluginCall, request: Call, parse: (Response) -> JSObject) {
+        catalogCalls[request] = call
+        if (catalogDestroyed) { cancelCatalogCalls(); return }
+        request.enqueue(object : Callback {
+            override fun onFailure(request: Call, error: IOException) = finish(Result.failure(error))
+            override fun onResponse(request: Call, response: Response) = finish(runCatching { response.use(parse) })
+            private fun finish(result: Result<JSObject>) {
+                val pendingCall = catalogCalls.remove(request) ?: return
+                result.fold(pendingCall::resolve) { error ->
+                    pendingCall.reject(when (error) {
+                        is CatalogException -> error.message ?: "Unable to load the Fish Audio catalog."
+                        is InterruptedIOException -> "Fish Audio's catalog request timed out. Please retry."
+                        is IOException -> "Unable to load the Fish Audio catalog. Check your network connection."
+                        else -> "Fish Audio returned an invalid catalog. Please retry."
+                    })
+                }
+            }
+        })
+    }
+
+    private fun cancelCatalogCalls() {
+        for (request in catalogCalls.keys) {
+            val pendingCall = catalogCalls.remove(request) ?: continue
+            request.cancel()
+            pendingCall.reject("Catalog request cancelled.")
         }
     }
 
@@ -228,6 +303,8 @@ class FishTtsPlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        catalogDestroyed = true
+        cancelCatalogCalls()
         main.post { releasePreview() }
         super.handleOnDestroy()
     }

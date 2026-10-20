@@ -6,6 +6,12 @@ import android.content.pm.PackageManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,8 +37,8 @@ class EngineIntegrationTest {
     private val reference = "ca3007f96ae7499ab87d27ea3599956a"
     private val secondReference = "9a9cf47702da476aa4629e2506d4a857"
     private val testKey = "test-not-a-real-fish-api-key"
-    private fun profile(id: String = "first", referenceId: String = reference) =
-        VoiceProfile(id, id, referenceId, parameters = JSONObject().put("temperature", 0.4))
+    private fun profile(id: String = "first", referenceId: String = reference, label: String = id, model: String = "") =
+        VoiceProfile(id, label, referenceId, model, parameters = JSONObject().put("temperature", 0.4))
 
     @Before fun setUp() { original = store.read(); store.clear() }
     @After fun tearDown() {
@@ -163,89 +169,271 @@ class EngineIntegrationTest {
         } finally { engine.shutdown() }
     }
 
-    @Test fun vueFormsSaveIndependentlyAndVoiceListSupportsAddEditAndRemove() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
-            assertEquals("2", evaluate(scenario, "document.querySelectorAll('form').length"))
-            assertEquals("0", evaluate(scenario, "document.querySelectorAll('style,link[rel=stylesheet],svg,img').length"))
-            evaluate(scenario, "document.getElementById('add-voice').click()")
-            setInput(scenario, "input[data-field=referenceId]", reference)
-            setInput(scenario, "textarea[data-field=parameters]", JSONObject().put("temperature", 0.4)
-                .put("prosody", JSONObject().put("speed", 1.25).put("volume", -3)).toString())
-            setInput(scenario, "#api-key", testKey)
-            evaluate(scenario, "document.getElementById('save-api-key').click()")
-            awaitJs(scenario, "document.body.innerText.includes('API key saved in protected native storage.')")
-            assertTrue(store.read().voices.isEmpty())
-            assertEquals(JSONObject.quote(reference), evaluate(scenario, "document.querySelector('input[data-field=referenceId]').value"))
-            assertEquals("\"\"", evaluate(scenario, "document.getElementById('api-key').value"))
-
-            evaluate(scenario, "document.getElementById('save-voices').click()")
-            awaitJs(scenario, "!document.body.innerText.includes('Unsaved voice changes.')")
-            assertEquals(1, store.read().voices.size)
-            val firstId = store.read().voices.first().id
-            assertTrue(firstId.isNotBlank())
-            assertEquals("", store.read().voices.first().model)
-            evaluate(scenario, "document.getElementById('add-voice').click()")
-            setInput(scenario, "input[data-field=referenceId]", secondReference, 1)
-            evaluate(scenario, "document.getElementById('save-voices').click()")
-            awaitJs(scenario, "!document.body.innerText.includes('Unsaved voice changes.')")
-            assertEquals(2, store.read().voices.size)
-
-            setInput(scenario, "textarea[data-field=parameters]", JSONObject().put("temperature", 0.8).toString())
-            evaluate(scenario, "document.querySelector('form fieldset fieldset:last-of-type button').click()")
-            evaluate(scenario, "document.getElementById('save-voices').click()")
-            awaitJs(scenario, "!document.body.innerText.includes('Unsaved voice changes.')")
-            val config = store.read()
-            assertEquals(1, config.voices.size)
-            assertEquals(firstId, config.voices.first().id)
-            assertEquals(0.8, config.voices.first().parameters.getDouble("temperature"), 0.0)
-            assertEquals(testKey, config.apiKey)
-            scenario.recreate()
-            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
-            assertEquals("\"\"", evaluate(scenario, "document.getElementById('api-key').value"))
-            assertEquals("0", evaluate(scenario, "localStorage.length"))
-            assertEquals("0", evaluate(scenario, "sessionStorage.length"))
-            assertEquals(JSONObject.quote(reference), evaluate(scenario, "document.querySelector('input[data-field=referenceId]').value"))
-        }
+    @Test fun keyedUpdatesAndRemovalPreserveOtherProfilesAndCredentials() {
+        val first = profile()
+        val second = profile("second")
+        store.saveApiKey(testKey)
+        store.saveVoice(first)
+        store.saveVoice(second)
+        store.saveDefaultVoice(second.id)
+        val updated = VoiceProfile(first.id, "Updated", first.referenceId, "drama-3",
+            JSONObject().put("temperature", 0.9), "[calm]\n ")
+        store.saveVoice(updated)
+        val saved = store.read()
+        assertEquals(listOf(first.id, second.id), saved.voices.map { it.id })
+        assertEquals(second.toJson().toString(), saved.voices[1].toJson().toString())
+        assertEquals(second.id, saved.defaultVoiceId)
+        assertEquals(testKey, saved.apiKey)
+        assertEquals("[calm]\n ", saved.voices[0].prefixText)
+        store.removeVoice(second.id)
+        assertEquals(first.id, store.read().defaultVoiceId)
+        assertEquals(updated.toJson().toString(), store.read().voices.single().toJson().toString())
+        assertThrows(IllegalArgumentException::class.java) { store.removeVoice("missing") }
+        store.removeVoice(first.id)
+        assertTrue(store.read().voices.isEmpty())
+        assertEquals("", store.read().defaultVoiceId)
+        assertEquals(testKey, store.read().apiKey)
     }
 
-    @Test fun vueSavesPrefixModelAndDefaultWithoutDiscardingUnsavedVoiceEdits() {
-        val first = profile()
-        val second = profile("second", secondReference)
-        store.saveVoices(listOf(first, second))
+    @Test fun concurrentKeyedWritesDoNotLoseAnotherProfile() {
+        val workers = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val ready = CountDownLatch(1)
+        try {
+            val writes = listOf(profile(), profile("second")).map { voice ->
+                workers.submit { ready.await(); ConfigurationStore(context).saveVoice(voice) }
+            }
+            ready.countDown()
+            writes.forEach { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(setOf("first", "second"), store.read().voices.map { it.id }.toSet())
+        } finally { workers.shutdownNow() }
+    }
+
+    @Test fun keyedUpdateAtCapacityDoesNotPermitAnExtraProfile() {
+        store.saveVoices((1..50).map { profile("profile-" + it) })
+        store.saveDefaultVoice("profile-50")
+        store.saveVoice(profile("profile-50", label = "Updated at capacity"))
+        assertEquals("Updated at capacity", store.read().voices.last().label)
+        assertThrows(IllegalArgumentException::class.java) { store.saveVoice(profile("extra")) }
+        assertEquals(50, store.read().voices.size)
+        assertEquals("profile-50", store.read().defaultVoiceId)
+    }
+
+    @Test fun vueSavesOneProfileDespiteAnotherInvalidDraft() {
+        store.saveVoices(listOf(profile(label = "Reading voice"), profile("second", secondReference, "Narrator clone", "drama-3")))
         store.saveApiKey(testKey)
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
-            assertEquals(JSONObject.quote("1"), evaluate(scenario, "document.getElementById('preview-speed').value"))
-            assertEquals("true", evaluate(scenario, "document.getElementById('preview-pitch').disabled"))
+            assertEquals("false", evaluate(scenario, "document.getElementById('global-configuration').open"))
+            assertEquals("0", evaluate(scenario, "document.querySelectorAll('#default-voice,#save-voices').length"))
+            expandVoice(scenario, 0)
+            expandVoice(scenario, 1)
+            openAdvanced(scenario, 1)
             val prefix = "[calm]\n "
             setInput(scenario, "textarea[data-field=prefixText]", prefix, 1)
-            selectOption(scenario, "select[id^=model-]", "drama-3", 1)
-            selectOption(scenario, "#default-voice", second.id)
-            awaitJs(scenario, "document.body.innerText.includes('Default system voice saved.')")
-            assertEquals(second.id, store.read().defaultVoiceId)
-            assertEquals("", store.read().voices[1].model)
+            setInput(scenario, "textarea[data-field=parameters]", "invalid JSON", 1)
+            setInput(scenario, "input[id^=label-]", "Edited reading voice")
+            saveRow(scenario, 0)
+            awaitJs(scenario, "document.querySelectorAll('article[data-voice]')[0].dataset.dirty === 'false'")
+            assertEquals("Edited reading voice", store.read().voices[0].label)
             assertEquals("", store.read().voices[1].prefixText)
-            assertEquals(JSONObject.quote(prefix), evaluate(scenario, "document.querySelectorAll('textarea[data-field=prefixText]')[1].value"))
-            assertEquals(JSONObject.quote("drama-3"), evaluate(scenario, "document.querySelectorAll('select[id^=model-]')[1].value"))
-            assertEquals("true", evaluate(scenario, "document.body.innerText.includes('Unsaved voice changes.')"))
-            evaluate(scenario, "document.getElementById('save-voices').click()")
-            awaitJs(scenario, "!document.body.innerText.includes('Unsaved voice changes.')")
-            assertEquals(second.id, store.read().defaultVoiceId)
-            assertEquals("drama-3", store.read().voices[1].model)
+            assertEquals(0.4, store.read().voices[1].parameters.getDouble("temperature"), 0.0)
+            assertEquals(JSONObject.quote("invalid JSON"), evaluate(scenario, "document.querySelectorAll('textarea[data-field=parameters]')[1].value"))
+            assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=expand-voice]')[1].getAttribute('aria-expanded') === 'true'"))
+            assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].disabled"))
+            assertEquals("false", evaluate(scenario, "document.getElementById('start-preview').disabled"))
+            selectOption(scenario, "#preview-voice", "second")
+            assertEquals("true", evaluate(scenario, "document.getElementById('start-preview').disabled"))
+            saveRow(scenario, 1)
+            awaitJs(scenario, "document.querySelectorAll('article[data-voice]')[1].textContent.includes('Generation parameters must be a valid JSON object.')")
+            assertEquals("", store.read().voices[1].prefixText)
+            setInput(scenario, "textarea[data-field=parameters]", "{\"temperature\":0.8}", 1)
+            saveRow(scenario, 1)
+            awaitJs(scenario, "document.querySelectorAll('article[data-voice]')[1].dataset.dirty === 'false'")
             assertEquals(prefix, store.read().voices[1].prefixText)
+            assertEquals("drama-3", store.read().voices[1].model)
+            assertEquals(0.8, store.read().voices[1].parameters.getDouble("temperature"), 0.0)
             scenario.recreate()
             awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
-            assertEquals(JSONObject.quote(second.id), evaluate(scenario, "document.getElementById('default-voice').value"))
-            assertEquals(JSONObject.quote("drama-3"), evaluate(scenario, "document.querySelectorAll('select[id^=model-]')[1].value"))
             assertEquals(JSONObject.quote(prefix), evaluate(scenario, "document.querySelectorAll('textarea[data-field=prefixText]')[1].value"))
+            assertEquals("\"\"", evaluate(scenario, "document.getElementById('api-key').value"))
+            assertEquals("0", evaluate(scenario, "localStorage.length + sessionStorage.length"))
+        }
+    }
+
+    @Test fun vueDefaultAndKeySavesPreserveAnUnrelatedDraft() {
+        store.saveVoices(listOf(profile(model = "drama-3"), profile("second", secondReference)))
+        store.saveApiKey(testKey)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            expandVoice(scenario, 0)
+            openAdvanced(scenario, 0)
+            val prefix = " [whisper]\n "
+            setInput(scenario, "textarea[data-field=prefixText]", prefix)
+            evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].click()")
+            awaitJs(scenario, "document.body.innerText.includes('Default system voice saved.')")
+            assertEquals("second", store.read().defaultVoiceId)
+            assertEquals("", store.read().voices[0].prefixText)
+            assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=expand-voice]')[0].getAttribute('aria-expanded') === 'true'"))
+            assertEquals("false", evaluate(scenario, "document.querySelectorAll('[data-action=expand-voice]')[1].getAttribute('aria-expanded') === 'true'"))
+            assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].checked"))
+            assertEquals(JSONObject.quote("first"), evaluate(scenario, "document.getElementById('preview-voice').value"))
+            evaluate(scenario, "document.querySelector('#global-configuration > summary').click()")
+            setInput(scenario, "#api-key", testKey)
+            evaluate(scenario, "document.getElementById('save-api-key').click()")
+            awaitJs(scenario, "document.body.innerText.includes('API key saved in protected native storage.')")
+            assertEquals(JSONObject.quote(prefix), evaluate(scenario, "document.querySelector('textarea[data-field=prefixText]').value"))
+            assertEquals("true", evaluate(scenario, "document.querySelector('article[data-voice]').dataset.dirty === 'true'"))
+            saveRow(scenario, 0)
+            awaitJs(scenario, "document.querySelector('article[data-voice]').dataset.dirty === 'false'")
+            assertEquals(prefix, store.read().voices[0].prefixText)
+            assertEquals("second", store.read().defaultVoiceId)
             setInput(scenario, "#preview-speed", "0.1")
             evaluate(scenario, "document.getElementById('start-preview').click()")
             awaitJs(scenario, "document.body.innerText.includes('Choose a preview speed between 0.5 and 2.0.')")
             setInput(scenario, "#preview-speed", "1.5")
-            assertEquals(JSONObject.quote("1.5"), evaluate(scenario, "document.getElementById('preview-speed').value"))
             assertEquals("true", evaluate(scenario, "document.getElementById('preview-pitch').disabled"))
+            scenario.recreate()
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].checked"))
+            assertEquals(JSONObject.quote("drama-3"), evaluate(scenario, "document.querySelector('details[id^=model-] > summary').textContent.trim()"))
         }
+    }
+
+    @Test fun vueRemovalPreservesAnotherDraftAndFallsBackToTheRemainingDefault() {
+        store.saveVoices(listOf(profile(), profile("second", secondReference)))
+        store.saveDefaultVoice("second")
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            expandVoice(scenario, 0)
+            openAdvanced(scenario, 0)
+            setInput(scenario, "textarea[data-field=parameters]", "invalid draft")
+            expandVoice(scenario, 1)
+            evaluate(scenario, "document.querySelectorAll('[data-action=remove-voice]')[1].click()")
+            awaitJs(scenario, "document.querySelectorAll('article[data-voice]').length === 1")
+            assertEquals("first", store.read().defaultVoiceId)
+            assertEquals(1, store.read().voices.size)
+            assertEquals(JSONObject.quote("invalid draft"), evaluate(scenario, "document.querySelector('textarea[data-field=parameters]').value"))
+            assertEquals("true", evaluate(scenario, "document.querySelector('[data-action=default-voice]').checked"))
+            evaluate(scenario, "document.getElementById('add-voice').click()")
+            evaluate(scenario, "document.querySelectorAll('[data-action=remove-voice]')[1].click()")
+            awaitJs(scenario, "document.querySelectorAll('article[data-voice]').length === 1")
+            assertEquals(1, store.read().voices.size)
+        }
+    }
+
+    @Test fun styledRowsHaveSeparateTouchTargetsAndLongNamesDoNotOverflow() {
+        store.saveVoices(listOf(profile(label = "A".repeat(100)), profile("second", secondReference, "Narrator clone")))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("1", evaluate(scenario, "document.querySelectorAll('h1').length"))
+            assertEquals("false", evaluate(scenario, "document.getElementById('global-configuration').open"))
+            val targets = JSONObject(evaluate(scenario, """
+                (() => {
+                  const card = document.querySelector('article[data-voice]');
+                  const choice = card.querySelector('.default-choice').getBoundingClientRect();
+                  const toggle = card.querySelector('[data-action=expand-voice]').getBoundingClientRect();
+                  return {width: choice.width, height: choice.height, toggleHeight: toggle.height,
+                    right: choice.right, left: toggle.left, font: getComputedStyle(document.documentElement).fontSize};
+                })()
+            """.trimIndent()))
+            assertTrue("Unexpected touch geometry: $targets", targets.getDouble("width") >= 48 &&
+                targets.getDouble("height") >= 48 && targets.getDouble("toggleHeight") >= 48 &&
+                // Device-scale conversion can differ by millionths of a CSS pixel at a shared edge.
+                targets.getDouble("right") <= targets.getDouble("left") + 0.01)
+            assertEquals("true", evaluate(scenario, "document.documentElement.scrollWidth <= document.documentElement.clientWidth"))
+            expandVoice(scenario, 0)
+            assertEquals("first", store.read().defaultVoiceId)
+            assertEquals("true", evaluate(scenario, """
+                (() => {
+                  const input = document.querySelector('input[data-field=referenceId]');
+                  return document.querySelector('label[for="' + input.id + '"]').getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
+                })()
+            """.trimIndent()))
+            evaluate(scenario, "document.getElementById('add-voice').click()")
+            evaluate(scenario, "document.getElementById('add-voice').click()")
+            assertEquals("true", evaluate(scenario, "Array.from(document.querySelectorAll('[data-action=default-voice]')).slice(2).every(radio => radio.disabled && !radio.checked)"))
+            assertEquals("true", evaluate(scenario, "document.documentElement.scrollWidth <= document.documentElement.clientWidth"))
+        }
+    }
+
+    /** A real touch opens the actual IME; DOM-only focus would not exercise Android keyboard behavior. */
+    @Test fun referenceEditorStaysVisibleAboveTheAndroidKeyboard() {
+        store.saveVoices(listOf(profile(label = "Reading voice"), profile("second", secondReference, "Conversation voice")))
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            expandVoice(scenario, 0)
+            val height = evaluate(scenario, "visualViewport.height").toDouble()
+            val point = JSONObject(evaluate(scenario, """
+                (() => {
+                  const input = document.querySelector('input[data-field=referenceId]');
+                  input.scrollIntoView({block: 'center'});
+                  const rect = input.getBoundingClientRect();
+                  return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, width: innerWidth};
+                })()
+            """.trimIndent()))
+            var x = 0f
+            var y = 0f
+            scenario.onActivity { activity ->
+                val view = activity.bridge.webView
+                val origin = IntArray(2)
+                view.getLocationOnScreen(origin)
+                val scale = view.width / point.getDouble("width")
+                x = (origin[0] + point.getDouble("x") * scale).toFloat()
+                y = (origin[1] + point.getDouble("y") * scale).toFloat()
+            }
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val downTime = SystemClock.uptimeMillis()
+            for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+            }
+            try {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                var visible = false
+                while (!visible && System.nanoTime() < deadline) {
+                    scenario.onActivity { activity ->
+                        visible = ViewCompat.getRootWindowInsets(activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                    }
+                    if (!visible) Thread.sleep(100)
+                }
+                assertTrue("Android keyboard did not open after tapping the input.", visible)
+                awaitJs(scenario, "visualViewport.height < $height")
+                awaitJs(scenario, """
+                    (() => {
+                      const input = document.querySelector('input[data-field=referenceId]');
+                      const rect = input.getBoundingClientRect();
+                      return document.activeElement === input && rect.top >= visualViewport.offsetTop &&
+                        rect.bottom <= visualViewport.offsetTop + visualViewport.height;
+                    })()
+                """.trimIndent())
+                assertEquals("true", evaluate(scenario, "document.documentElement.scrollWidth <= document.documentElement.clientWidth"))
+            } finally {
+                scenario.onActivity { activity ->
+                    WindowCompat.getInsetsController(activity.window, activity.bridge.webView).hide(WindowInsetsCompat.Type.ime())
+                }
+            }
+        }
+    }
+
+    private fun expandVoice(scenario: ActivityScenario<MainActivity>, index: Int) {
+        evaluate(scenario, """
+            (() => {
+              const button = document.querySelectorAll('[data-action=expand-voice]')[$index];
+              if (button.getAttribute('aria-expanded') !== 'true') button.click();
+              return true;
+            })()
+        """.trimIndent())
+        awaitJs(scenario, "document.querySelectorAll('[data-action=expand-voice]')[$index].getAttribute('aria-expanded') === 'true'")
+    }
+
+    private fun openAdvanced(scenario: ActivityScenario<MainActivity>, index: Int) {
+        evaluate(scenario, "document.querySelectorAll('details.advanced')[$index].open = true")
+        awaitJs(scenario, "document.querySelectorAll('details.advanced')[$index].open")
+    }
+
+    private fun saveRow(scenario: ActivityScenario<MainActivity>, index: Int) {
+        evaluate(scenario, "document.querySelectorAll('[data-action=save-voice]')[$index].click()")
     }
 
     private fun selectOption(scenario: ActivityScenario<MainActivity>, selector: String, value: String, index: Int = 0) {

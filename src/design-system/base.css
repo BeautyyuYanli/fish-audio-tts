@@ -1,0 +1,37 @@
+/* All appearance values use semantic roles; layout keywords remain ordinary CSS. */
+* { box-sizing: border-box; }
+:root { color-scheme: light; font-family: var(--font-body); color: var(--color-text); background: var(--color-page); }
+body { margin: var(--space-none); font-size: var(--text-body); line-height: var(--line-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button, summary, input, select, textarea { -webkit-tap-highlight-color: var(--color-transparent); }
+button, summary { touch-action: manipulation; }
+button, input, select, textarea { max-inline-size: 100%; }
+button, summary, label { overflow-wrap: anywhere; }
+button, summary { cursor: pointer; }
+button:disabled, input:disabled, select:disabled, textarea:disabled, summary[aria-disabled=true] { cursor: not-allowed; }
+:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+h1, h2, h3, p { margin: var(--space-none); }
+h1 { font-size: var(--text-title); line-height: var(--line-title); font-weight: var(--weight-heading); }
+h2 { font-size: var(--text-section); line-height: var(--line-section); font-weight: var(--weight-heading); }
+a { color: var(--color-action); text-underline-offset: var(--space-tight); }
+table { inline-size: 100%; border-collapse: collapse; table-layout: fixed; }
+td { padding: var(--space-none); }
+fieldset { min-inline-size: 0; margin: var(--space-none); padding: var(--space-none); border: none; }
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::marker { content: ''; }
+input:not([type=radio]), select, textarea {
+  display: block;
+  inline-size: 100%;
+  min-block-size: var(--control-min-height);
+  padding: var(--space-control) var(--space-field);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+input::placeholder, textarea::placeholder { color: var(--color-text-secondary); opacity: 1; }
+textarea { resize: vertical; }
+input:disabled, select:disabled, textarea:disabled { background: var(--color-disabled); color: var(--color-text-secondary); opacity: 1; }
+input[type=radio] { margin: var(--space-none); accent-color: var(--color-action); inline-size: var(--radio-size); block-size: var(--radio-size); }
+input[type=radio]:disabled { opacity: var(--opacity-disabled); }
+label { display: block; font-weight: var(--weight-control); margin-block-end: var(--space-small); }

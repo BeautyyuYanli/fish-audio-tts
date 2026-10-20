@@ -92,6 +92,19 @@ class FishSynthesizerTest {
         }
     }
 
+    @Test fun newSafeModelSlugsAreForwardedWithoutAnOfflineAllowlist() {
+        // This checks forwarding of schema-provided slugs, not upstream access to a future model.
+        for (slug in listOf("s1", "future-model.v4")) {
+            val selected = VoiceProfile.fromJson(profile.toJson().put("model", slug))
+            enqueue(wav(byteArrayOf(0, 1)))
+            synthesizer().synthesize(config.apiKey, selected, "Selected model.", 100, "en-US", SynthesisSession(), RecordingCallback())
+            assertEquals(slug, server.takeRequest().getHeader("model"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            VoiceProfile.fromJson(profile.toJson().put("model", "s1\r\nInjected: header"))
+        }
+    }
+
     @Test fun forwardsSystemRateWithoutClampingOrMultiplyingTableValues() {
         // The fixture checks forwarding, not upstream acceptance of rates outside Fish's range.
         for ((rate, expected) in listOf(1 to 0.01, 500 to 5.0)) {
