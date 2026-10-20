@@ -91,7 +91,7 @@ class LiveSynthesisTest {
             assertTrue("Live synthesis timed out.", completed.await(125, TimeUnit.SECONDS))
             assertEquals("Live system synthesis error code.", 0, error.get())
             assertTrue("No completion callback.", done.get())
-            assertEquals(24000, rate.get())
+            assertEquals(48000, rate.get())
             assertEquals(AudioFormat.ENCODING_PCM_16BIT, format.get())
             assertEquals(1, channels.get())
             assertTrue("No PCM callbacks.", audioBytes.get() > 0)

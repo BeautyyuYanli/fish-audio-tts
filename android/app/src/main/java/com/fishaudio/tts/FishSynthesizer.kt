@@ -52,10 +52,12 @@ class FishSynthesizer(
             if (apiKey.isBlank()) throw SynthesisFailure(TextToSpeech.ERROR_NOT_INSTALLED_YET)
             if (text.isBlank() || text.length > 4000) throw SynthesisFailure(TextToSpeech.ERROR_INVALID_REQUEST)
             // Deep-copy table parameters, then overlay only supplied system generation values.
-            // Do not fill defaults or multiply/clamp a system rate; Fish validates its own bounds.
+            // Do not fill generation defaults or multiply/clamp a system rate; Fish validates its own bounds.
             // Prefixes apply once in the native synthesis path, including previews and Activity-free system calls.
             val body = JSONObject(profile.parameters.toString()).put("text", profile.prefixText + text).put("reference_id", profile.referenceId)
-                .put("format", "wav").put("sample_rate", WavPcmReader.SAMPLE_RATE)
+                .put("format", "opus").put("sample_rate", OggOpusReader.SAMPLE_RATE)
+            // Bitrate is transport policy; preserve an explicitly configured upstream bitrate.
+            if (!body.has("opus_bitrate")) body.put("opus_bitrate", 32000)
             if (!language.isNullOrBlank()) body.put("language", language)
             if (speechRate != null) {
                 val prosody = body.optJSONObject("prosody") ?: JSONObject()
@@ -76,12 +78,9 @@ class FishSynthesizer(
                     else -> TextToSpeech.ERROR_SERVICE
                 })
                 val stream = response.body?.byteStream() ?: throw SynthesisFailure(TextToSpeech.ERROR_SYNTHESIS)
-                val pcm = WavPcmReader.open(stream, session::check)
-                session.check()
-                checkOutput(callback.start(WavPcmReader.SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1))
-                pcm.copyPcm(callback.maxBufferSize, session::check) { buffer, count ->
-                    checkOutput(callback.audioAvailable(buffer, 0, count))
-                }
+                OpusPcmDecoder().decode(stream, callback.maxBufferSize, session::check,
+                    start = { checkOutput(callback.start(OggOpusReader.SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)) },
+                    emit = { buffer, count -> checkOutput(callback.audioAvailable(buffer, 0, count)) })
                 session.check()
             }
         } catch (_: SynthesisCancelled) {

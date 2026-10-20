@@ -3,36 +3,49 @@ package com.fishaudio.tts
 import android.media.AudioFormat
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.TextToSpeech
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
+import okhttp3.tls.HandshakeCertificates
+import okhttp3.tls.HeldCertificate
 import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** Local protocol fixtures exercise our code, not Fish Audio authentication or speech quality. */
+/** A local HTTP peer and actual Android Opus codec; no Fish credentials or upstream service. */
+@RunWith(AndroidJUnit4::class)
 class FishSynthesizerTest {
     private lateinit var server: MockWebServer
+    private lateinit var certificates: HandshakeCertificates
     private val profile = VoiceProfile("profile-one", "First", "ca3007f96ae7499ab87d27ea3599956a", "s2.1-pro-free",
         JSONObject().put("temperature", 0.4).put("normalize", false).put("language", "ja-JP")
             .put("prosody", JSONObject().put("speed", 1.25).put("volume", -3).put("normalize_loudness", false)))
     private val config = EngineConfiguration("test-key-not-a-credential", listOf(profile))
 
-    @Before fun setUp() { server = MockWebServer(); server.start() }
+    @Before fun setUp() {
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val serverCertificates = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        certificates = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
+        server = MockWebServer()
+        server.protocols = listOf(Protocol.HTTP_1_1)
+        server.useHttps(serverCertificates.sslSocketFactory(), false)
+        server.start()
+    }
     @After fun tearDown() { server.shutdown() }
 
     @Test fun sendsDocumentedParametersAndExtractsOnlyPcmSynchronously() {
-        val samples = ByteArray(30) { it.toByte() }
-        enqueue(wav(samples, ancillary = true))
+        enqueue(opus())
         val callback = RecordingCallback()
         synthesizer().synthesize(config.apiKey, profile, "A real API contract fixture.", 120, "en-US", SynthesisSession(), callback)
         val request = server.takeRequest(1, TimeUnit.SECONDS)!!
@@ -42,8 +55,9 @@ class FishSynthesizerTest {
         assertEquals("s2.1-pro-free", request.getHeader("model"))
         val body = JSONObject(request.body.readUtf8())
         assertEquals(profile.referenceId, body.getString("reference_id"))
-        assertEquals("wav", body.getString("format"))
-        assertEquals(24000, body.getInt("sample_rate"))
+        assertEquals("opus", body.getString("format"))
+        assertEquals(48000, body.getInt("sample_rate"))
+        assertEquals(32000, body.getInt("opus_bitrate"))
         assertEquals("en-US", body.getString("language"))
         assertEquals(1.2, body.getJSONObject("prosody").getDouble("speed"), 0.0001)
         assertEquals(-3, body.getJSONObject("prosody").getInt("volume"))
@@ -52,11 +66,13 @@ class FishSynthesizerTest {
         assertEquals(0.4, body.getDouble("temperature"), 0.0)
         assertEquals(1.25, profile.parameters.getJSONObject("prosody").getDouble("speed"), 0.0)
         assertEquals("ja-JP", profile.parameters.getString("language"))
-        assertEquals(listOf(24000, AudioFormat.ENCODING_PCM_16BIT, 1), callback.format)
-        assertArrayEquals(samples, callback.audio.toByteArray())
+        assertEquals(listOf(48000, AudioFormat.ENCODING_PCM_16BIT, 1), callback.format)
+        // Exact 2.037-second source duration after pre-skip and final granule trimming.
+        assertEquals(195552, callback.audio.size())
+        assertTrue(callback.audio.toByteArray().any { it != 0.toByte() })
         assertTrue(callback.lengths.all { it <= callback.maxBufferSize && it % 2 == 0 })
         assertTrue(callback.threads.all { it == Thread.currentThread() })
-        assertTrue(callback.errors.isEmpty())
+        assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
         assertEquals("done", callback.events.last())
         assertEquals(1, callback.doneCount)
     }
@@ -64,13 +80,13 @@ class FishSynthesizerTest {
     @Test fun drama3ProfileIsAcceptedAndSentAsTheModelHeader() {
         val drama = VoiceProfile.fromJson(JSONObject().put("id", "drama-profile").put("label", "Drama 3")
             .put("referenceId", profile.referenceId).put("model", "drama-3").put("parameters", JSONObject()))
-        enqueue(wav(byteArrayOf(0, 1)))
+        enqueue(opus())
         val callback = RecordingCallback()
         synthesizer().synthesize(config.apiKey, drama, "Drama 3.", 100, "en-US", SynthesisSession(), callback)
         val request = server.takeRequest(1, TimeUnit.SECONDS)!!
         assertEquals("drama-3", request.getHeader("model"))
         assertEquals(drama.referenceId, JSONObject(request.body.readUtf8()).getString("reference_id"))
-        assertTrue(callback.errors.isEmpty())
+        assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
         assertEquals(1, callback.doneCount)
     }
 
@@ -80,7 +96,7 @@ class FishSynthesizerTest {
             val json = profile.toJson()
             if (prefix == null) json.remove("prefixText") else json.put("prefixText", prefix)
             val restored = VoiceProfile.fromJson(json)
-            enqueue(wav(byteArrayOf(0, 1)))
+            enqueue(opus())
             val callback = RecordingCallback()
             synthesizer().synthesize(config.apiKey, restored, text, 100, "en-US", SynthesisSession(), callback)
             val request = server.takeRequest(1, TimeUnit.SECONDS)!!
@@ -96,9 +112,12 @@ class FishSynthesizerTest {
         // This checks forwarding of schema-provided slugs, not upstream access to a future model.
         for (slug in listOf("s1", "future-model.v4")) {
             val selected = VoiceProfile.fromJson(profile.toJson().put("model", slug))
-            enqueue(wav(byteArrayOf(0, 1)))
-            synthesizer().synthesize(config.apiKey, selected, "Selected model.", 100, "en-US", SynthesisSession(), RecordingCallback())
+            enqueue(opus())
+            val callback = RecordingCallback()
+            synthesizer().synthesize(config.apiKey, selected, "Selected model.", 100, "en-US", SynthesisSession(), callback)
             assertEquals(slug, server.takeRequest().getHeader("model"))
+            assertTrue(callback.errors.isEmpty())
+            assertEquals(1, callback.doneCount)
         }
         assertThrows(IllegalArgumentException::class.java) {
             VoiceProfile.fromJson(profile.toJson().put("model", "s1\r\nInjected: header"))
@@ -108,7 +127,7 @@ class FishSynthesizerTest {
     @Test fun forwardsSystemRateWithoutClampingOrMultiplyingTableValues() {
         // The fixture checks forwarding, not upstream acceptance of rates outside Fish's range.
         for ((rate, expected) in listOf(1 to 0.01, 500 to 5.0)) {
-            enqueue(wav(byteArrayOf(0, 1)))
+            enqueue(opus())
             synthesizer().synthesize(config.apiKey, profile, "Speed.", rate, "en-US", SynthesisSession(), RecordingCallback())
             val body = JSONObject(server.takeRequest().body.readUtf8())
             assertEquals(expected, body.getJSONObject("prosody").getDouble("speed"), 0.0)
@@ -116,19 +135,19 @@ class FishSynthesizerTest {
     }
 
     @Test fun omitsUnspecifiedParametersAndModelSoUpstreamDefaultsApply() {
-        enqueue(wav(byteArrayOf(0, 0)))
+        enqueue(opus())
         val empty = VoiceProfile("empty-profile", "", profile.referenceId)
         val callback = RecordingCallback()
         synthesizer().synthesize(config.apiKey, empty, "Defaults.", null, null, SynthesisSession(), callback)
         val request = server.takeRequest()
         val body = JSONObject(request.body.readUtf8())
         assertNull(request.getHeader("model"))
-        assertEquals(setOf("text", "reference_id", "format", "sample_rate"), body.keys().asSequence().toSet())
-        assertTrue(callback.errors.isEmpty())
+        assertEquals(setOf("text", "reference_id", "format", "sample_rate", "opus_bitrate"), body.keys().asSequence().toSet())
+        assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
     }
 
     @Test fun retainsTableFallbacksWhenSystemValuesAreAbsent() {
-        enqueue(wav(byteArrayOf(0, 0)))
+        enqueue(opus())
         synthesizer().synthesize(config.apiKey, profile, "Fallbacks.", null, null, SynthesisSession(), RecordingCallback())
         val body = JSONObject(server.takeRequest().body.readUtf8())
         assertEquals("ja-JP", body.getString("language"))
@@ -142,7 +161,7 @@ class FishSynthesizerTest {
             parameters = JSONObject().put("temperature", 0.9), prefixText = "[bright] ")
         val multiple = EngineConfiguration(config.apiKey, listOf(profile, other))
         val selected = VoiceCatalog.selection(VoiceCatalog.name(other, java.util.Locale.US), multiple)!!
-        enqueue(wav(byteArrayOf(0, 0)))
+        enqueue(opus())
         synthesizer().synthesize(multiple.apiKey, selected.first, "Second voice.", 100, selected.second.toLanguageTag(), SynthesisSession(), RecordingCallback())
         val request = server.takeRequest()
         val body = JSONObject(request.body.readUtf8())
@@ -155,44 +174,47 @@ class FishSynthesizerTest {
         assertNull(VoiceCatalog.selection(VoiceCatalog.name(other, java.util.Locale.US), config))
     }
 
-    @Test fun handlesStreamingWavLengthsAndOddNetworkReadBoundaries() {
-        val samples = ByteArray(22) { it.toByte() }
-        for (length in listOf(0L, 0xffffffffL)) {
-            server.enqueue(MockResponse().setBody(Buffer().write(wav(samples, dataLength = length)))
-                .throttleBody(3, 1, TimeUnit.MILLISECONDS))
-            val callback = RecordingCallback()
-            synthesizer().synthesize(config.apiKey, profile, "Streaming.", 100, "en-US", SynthesisSession(), callback)
-            assertArrayEquals(samples, callback.audio.toByteArray())
-            assertTrue(callback.errors.isEmpty())
-            assertEquals(1, callback.doneCount)
-        }
-    }
-
-    @Test fun acceptsFishStreamingWavPlaceholderUntilEof() {
-        // Captured from a successful Fish /v1/tts response: RIFF 0xffffff24, data 0xffffff00.
-        val samples = ByteArray(22) { it.toByte() }
-        server.enqueue(MockResponse().setChunkedBody(Buffer().write(
-            wav(samples, dataLength = 0xffffff00L, riffLength = 0xffffff24L)), 3))
+    @Test fun acceptsOpusOverOddHttpChunkBoundariesAndPreservesConfiguredBitrate() {
+        val custom = VoiceProfile("custom", "", profile.referenceId, parameters = JSONObject().put("opus_bitrate", 24000))
+        server.enqueue(MockResponse().setChunkedBody(Buffer().write(opus()), 3))
         val callback = RecordingCallback()
-        synthesizer().synthesize(config.apiKey, profile, "Streaming WAV.", 100, "en-US", SynthesisSession(), callback)
+        synthesizer().synthesize(config.apiKey, custom, "Streaming Opus.", 100, "en-US", SynthesisSession(), callback)
+        assertEquals(24000, JSONObject(server.takeRequest().body.readUtf8()).getInt("opus_bitrate"))
         assertTrue(callback.errors.isEmpty())
-        assertEquals(listOf(24000, AudioFormat.ENCODING_PCM_16BIT, 1), callback.format)
-        assertArrayEquals(samples, callback.audio.toByteArray())
+        assertEquals(listOf(48000, AudioFormat.ENCODING_PCM_16BIT, 1), callback.format)
+        assertEquals(195552, callback.audio.size())
         assertEquals(1, callback.doneCount)
         assertEquals("done", callback.events.last())
     }
 
+    @Test fun consecutiveUtterancesTrimBatchedPagesAndPreSkipSpanningPackets() {
+        val batched = InstrumentationRegistry.getInstrumentation().context.assets.open("tone-1000000.opus").use { it.readBytes() }
+        val extendedSkip = batched.copyOf().also {
+            // The original header is 27 bytes plus one lacing byte; adjust pre-skip and re-sign its page.
+            it[38] = (2000 and 255).toByte(); it[39] = (2000 ushr 8).toByte()
+            val headerPage = it.copyOf(47).also { page -> page.fill(0, 22, 26) }
+            java.nio.ByteBuffer.wrap(it).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putInt(22, OggOpusReader.checksum(headerPage))
+        }
+        val synthesizer = synthesizer()
+        for ((audio, size) in listOf(batched to 195552, extendedSkip to 192176, opus() to 195552)) {
+            enqueue(audio)
+            val callback = RecordingCallback()
+            synthesizer.synthesize(config.apiKey, profile, "Consecutive audio.", 100, "en-US", SynthesisSession(), callback)
+            assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
+            assertEquals(size, callback.audio.size())
+            assertEquals(1, callback.doneCount)
+            assertEquals("done", callback.events.last())
+        }
+    }
+
     @Test fun rejectsInvalidTruncatedAndEmptyAudioAndAlwaysFinishes() {
         val fixtures = listOf(
-            "Not a WAV response".toByteArray(),
-            wav(byteArrayOf(0, 0), sampleRate = 44100),
-            wav(byteArrayOf(0, 0), dataLength = 8),
-            wav(byteArrayOf(1, 2, 3), dataLength = 0xffffffffL),
-            wav(byteArrayOf(0, 0), dataLength = 0xffffff00L),
-            wav(byteArrayOf(0, 0), dataLength = 32L * 1024 * 1024 + 2),
-            wav(byteArrayOf(1, 2, 3), dataLength = 0xffffff00L, riffLength = 0xffffff24L),
-            wav(byteArrayOf(), dataLength = 0xffffff00L, riffLength = 0xffffff24L),
-            wav(byteArrayOf()),
+            "Not an Ogg response".toByteArray(),
+            byteArrayOf(),
+            opus().copyOf(10),
+            opus().dropLast(1).toByteArray(),
+            opus().copyOf().also { it[it.lastIndex] = (it.last().toInt() xor 1).toByte() },
         )
         for (fixture in fixtures) {
             enqueue(fixture)
@@ -256,7 +278,7 @@ class FishSynthesizerTest {
     }
 
     @Test fun cancellationUnblocksAStalledPcmStreamAfterAudioHasStarted() {
-        server.enqueue(MockResponse().setBody(Buffer().write(wav(ByteArray(40000))))
+        server.enqueue(MockResponse().setBody(Buffer().write(opus()))
             // MockWebServer also throttles request-body reads; keep the first window larger than the JSON request.
             .throttleBody(8192, 5, TimeUnit.SECONDS))
         val session = SynthesisSession()
@@ -270,7 +292,7 @@ class FishSynthesizerTest {
             session.cancel()
             future.get(2, TimeUnit.SECONDS)
             assertTrue(callback.errors.isEmpty())
-            assertTrue(callback.audio.size() in 1..8148)
+            assertTrue(callback.audio.size() in 1 until 195552)
             assertEquals(1, callback.doneCount)
             assertEquals("done", callback.events.last())
         } finally { executor.shutdownNow() }
@@ -279,7 +301,7 @@ class FishSynthesizerTest {
     @Test fun stalledResponseTimesOutAndFinishesOnTheSynthesisThread() {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         val callback = RecordingCallback()
-        val client = OkHttpClient.Builder().callTimeout(300, TimeUnit.MILLISECONDS).build()
+        val client = clientBuilder().callTimeout(300, TimeUnit.MILLISECONDS).build()
         FishSynthesizer(client, server.url("/v1/tts")).synthesize(config.apiKey, profile, "Timeout.", 100, "en-US", SynthesisSession(), callback)
         assertEquals(listOf(TextToSpeech.ERROR_NETWORK_TIMEOUT), callback.errors)
         assertEquals("done", callback.events.last())
@@ -287,7 +309,7 @@ class FishSynthesizerTest {
     }
 
     @Test fun outputRejectionStopsDeliveringAudioAndStillFinishes() {
-        enqueue(wav(ByteArray(40)))
+        enqueue(opus())
         val callback = RecordingCallback(rejectAudio = true)
         synthesizer().synthesize(config.apiKey, profile, "Output error.", 100, "en-US", SynthesisSession(), callback)
         assertEquals(listOf(TextToSpeech.ERROR_OUTPUT), callback.errors)
@@ -306,18 +328,11 @@ class FishSynthesizerTest {
         assertEquals("en-US", VoiceCatalog.selection("fish:${profile.id}:${profile.referenceId}:en-US", config)?.second?.toLanguageTag())
     }
 
-    private fun synthesizer() = FishSynthesizer(OkHttpClient.Builder().callTimeout(5, TimeUnit.SECONDS).build(), server.url("/v1/tts"))
+    private fun clientBuilder() = OkHttpClient.Builder().sslSocketFactory(certificates.sslSocketFactory(), certificates.trustManager)
+    private fun synthesizer() = FishSynthesizer(clientBuilder().callTimeout(5, TimeUnit.SECONDS).build(), server.url("/v1/tts"))
     private fun enqueue(bytes: ByteArray) { server.enqueue(MockResponse().setBody(Buffer().write(bytes))) }
 
-    private fun wav(pcm: ByteArray, dataLength: Long = pcm.size.toLong(), sampleRate: Int = 24000, ancillary: Boolean = false, riffLength: Long? = null): ByteArray {
-        val extra = if (ancillary) "JUNK".toByteArray() + byteArrayOf(1, 0, 0, 0, 42, 0) else byteArrayOf()
-        val header = ByteBuffer.allocate(44 + extra.size).order(ByteOrder.LITTLE_ENDIAN)
-            .put("RIFF".toByteArray()).putInt(riffLength?.toInt() ?: (36 + extra.size + pcm.size)).put("WAVE".toByteArray())
-            .put(extra).put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1)
-            .putInt(sampleRate).putInt(sampleRate * 2).putShort(2).putShort(16)
-            .put("data".toByteArray()).putInt(dataLength.toInt()).array()
-        return header + pcm
-    }
+    private fun opus(): ByteArray = InstrumentationRegistry.getInstrumentation().context.assets.open("tone-20000.opus").use { it.readBytes() }
 }
 
 private class RecordingCallback(private val rejectAudio: Boolean = false) : SynthesisCallback {
@@ -329,7 +344,7 @@ private class RecordingCallback(private val rejectAudio: Boolean = false) : Synt
     val firstAudio = java.util.concurrent.CountDownLatch(1)
     var format: List<Int> = emptyList()
     var doneCount = 0
-    override fun getMaxBufferSize() = 5
+    override fun getMaxBufferSize() = 511
     override fun hasStarted() = format.isNotEmpty()
     override fun hasFinished() = doneCount != 0
     override fun start(rate: Int, encoding: Int, channels: Int): Int {

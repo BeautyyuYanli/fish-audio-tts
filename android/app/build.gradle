@@ -9,12 +9,15 @@ android {
         targetCompatibility JavaVersion.VERSION_21
     }
     kotlinOptions { jvmTarget = '21' }
+    sourceSets {
+        androidTest.assets.srcDir 'src/test/resources'
+    }
     defaultConfig {
         applicationId "com.fishaudio.tts"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "1.1.0"
+        versionCode 10
+        versionName "1.1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -48,6 +51,8 @@ dependencies {
     testImplementation 'org.json:json:20250517'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    androidTestImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    androidTestImplementation 'com.squareup.okhttp3:okhttp-tls:4.12.0'
     implementation project(':capacitor-cordova-android-plugins')
 }
 
