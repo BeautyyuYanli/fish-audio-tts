@@ -16,7 +16,7 @@ npm run android:debug
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`android:debug` runs the Vue type check, Vite production build, Capacitor sync, and Gradle debug build. The debug APK uses the local Android debug signing key. For distribution, configure your own release signing in Android Studio.
+`android:debug` runs the Vue type check, Vite production build, Capacitor sync, and Gradle debug build. The debug APK uses the local Android debug signing key. GitHub Releases use the signed release build described below.
 
 Useful individual commands:
 
@@ -36,6 +36,23 @@ Install Chromium once with `npx playwright install chromium` before running `tes
 For a browser-only view, run `npm run dev -- --host 127.0.0.1`. Native configuration, synthesis and system settings controls are disabled in browsers. There is no browser TTS fallback. A production preview can be started with `npm run preview -- --host 127.0.0.1` after building.
 
 The Vite and Capacitor CLIs created the project scaffolds. Application sources such as `android/app/build.gradle` and the manifest are maintained here; generated web assets, Capacitor configuration JSON, `capacitor.build.gradle`, `capacitor.settings.gradle`, lockfiles, Gradle output and APKs must be regenerated with their tools rather than edited.
+
+## Release APK
+
+Publishing a GitHub Release (including a prerelease) runs [Release APK](../.github/workflows/release-apk.yml) against that release's tag. It builds the panel and bundled licenses, syncs Capacitor, runs Android unit tests and release lint, signs and verifies the release APK, then attaches `fish-audio-tts.apk` and `fish-audio-tts.apk.sha256` to that release. Re-running the workflow replaces those two assets.
+
+Configure these repository Actions secrets before the first run:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded release keystore |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Signing key alias |
+| `ANDROID_KEY_PASSWORD` | Signing key password |
+
+Keep a separate backup of the keystore and passwords; subsequent releases must use the same signing key to support in-place upgrades. A release signed with a different key cannot replace an existing debug installation.
+
+Before publishing, commit the intended version in `package.json` / its lockfile and `android/app/build.gradle` (`versionName` and an increased `versionCode`), and create the release tag from a commit containing this workflow. Draft releases do not trigger builds. **Actions → Release APK → Run workflow** builds the selected ref for verification and keeps the signed APK as an Actions artifact for seven days, without creating or updating a Release.
 
 
 ## Configuration and voices

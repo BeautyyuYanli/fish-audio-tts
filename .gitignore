@@ -19,6 +19,7 @@ docs/design/
 .env.*
 *.keystore
 *.jks
+.release-signing/
 
 # Editor directories and files
 .vscode/*
