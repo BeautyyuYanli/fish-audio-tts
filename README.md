@@ -1,5 +1,7 @@
 # Fish Audio TTS for Android
 
+**Fish Audio TTS is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Fish Audio.**
+
 Use Fish Audio voices in reading apps and other apps that support Android system text-to-speech. The English settings panel lets you manage voices and try them before reading.
 
 Requires Android 7.0+, an internet connection, and your own [Fish Audio API key](https://fish.audio/app/api-keys) with sufficient credits.

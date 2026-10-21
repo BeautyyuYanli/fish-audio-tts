@@ -11,7 +11,7 @@ The settings panel is in English. Once configured, the engine works while the pa
 - An internet connection whenever speech is generated.
 - For reading aloud, an app that supports **Android system TTS**.
 
-This is an independent client for Fish Audio. You use your own account; Fish Audio's service charges and terms apply.
+Fish Audio TTS is an independent, unofficial client and is not affiliated with, endorsed by, or sponsored by Fish Audio. You use your own account; Fish Audio's service charges and terms apply.
 
 ## Install
 
