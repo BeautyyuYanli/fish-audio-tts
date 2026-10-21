@@ -12,6 +12,8 @@ dist
 dist-ssr
 test-results/
 playwright-report/
+public/licenses/
+docs/design/
 *.local
 .env
 .env.*

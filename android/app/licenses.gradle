@@ -1,0 +1,58 @@
+import groovy.json.JsonSlurper
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+
+// Build-time verification only: each APK's dependency graph must have notices.
+// Updating a dependency requires reviewing the pinned native license inputs and
+// regenerating web assets via android:sync. No check is added to application code.
+android.applicationVariants.all { variant ->
+    def verifyLicenses = tasks.register("verify${variant.name.capitalize()}Licenses") {
+        group = 'verification'
+        description = "Check that ${variant.name} runtime dependencies have bundled license texts."
+        def bundled = file('src/main/assets/public/licenses/notices.json')
+        def catalogFile = rootProject.file('../licenses/catalog.json')
+        inputs.files(bundled, catalogFile)
+        doLast {
+            def parser = new JsonSlurper()
+            def catalog = parser.parse(catalogFile)
+            def notices = parser.parse(bundled)
+            def runtime = configurations.getByName("${variant.name}RuntimeClasspath")
+            // Filtering project artifacts avoids AGP's multiple AAR/JAR variants;
+            // their licenses are checked separately against their owning packages.
+            def modules = runtime.incoming.artifactView {
+                componentFilter { !(it instanceof ProjectComponentIdentifier) }
+            }.artifacts.artifacts.collect {
+                def id = it.id.componentIdentifier
+                if (!(id instanceof ModuleComponentIdentifier)) {
+                    throw new GradleException("Review the license for local runtime artifact ${id} before distributing it.")
+                }
+                "${id.group}:${id.module}:${id.version}".toString()
+            }.toSet()
+            def expected = catalog.android.collectMany { it.modules }.toSet()
+            def projects = runtime.incoming.resolutionResult.allComponents.collect { it.id }
+                .findAll { it instanceof ProjectComponentIdentifier && it.projectPath != project.path }
+                .collect { it.projectPath }.toSet()
+            if (modules != expected || projects != catalog.androidProjects.keySet()) {
+                throw new GradleException("Runtime license inventory changed. Review licenses/catalog.json and run npm run android:sync. Missing: ${modules - expected}; stale: ${expected - modules}; projects: ${projects}")
+            }
+            def licensedPackages = notices.components.collectMany { it.packages }.toSet()
+            if (!licensedPackages.containsAll(modules) || notices.androidProjects != catalog.androidProjects) {
+                throw new GradleException('Bundled licenses are stale. Run npm run android:sync.')
+            }
+            catalog.android.each { group ->
+                def entry = notices.components.find { it.id == "android:${group.name}" }
+                if (entry == null || entry.license != group.license || entry.packages.toSet() != group.modules.toSet() ||
+                    entry.notices*.text != group.files.collect { rootProject.file("../${it}").getText('UTF-8') }) {
+                    throw new GradleException("Missing or stale license text for ${group.name}. Run npm run android:sync.")
+                }
+            }
+            catalog.androidProjects.values().each { owner ->
+                if (!licensedPackages.any { it == owner || it.startsWith("${owner}@") }) {
+                    throw new GradleException("Missing license for native project owner ${owner}.")
+                }
+            }
+            logger.lifecycle("Verified bundled licenses for ${modules.size()} Android runtime modules and ${projects.size()} native projects.")
+        }
+    }
+    variant.mergeAssetsProvider.configure { dependsOn(verifyLicenses) }
+}

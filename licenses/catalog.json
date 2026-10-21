@@ -1,0 +1,244 @@
+{
+  "npmRuntimeHelpers": [
+    "vite",
+    "@vitejs/plugin-vue",
+    "rolldown"
+  ],
+  "sources": {
+    "LICENSE": {
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/cordova-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/apache/cordova-android/rel/14.0.1/LICENSE",
+      "sha256": "401f08372facabc78d6d408a32de4f617fd9552c95e01797838c9d60a938b4da"
+    },
+    "licenses/upstream/cordova-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/apache/cordova-android/rel/14.0.1/NOTICE",
+      "sha256": "e94707080ab2781d5ba4ceac999f31db2539d2477783287969c52580b9fa84b0"
+    },
+    "licenses/upstream/kotlin-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.20/license/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/kotlin-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.20/license/NOTICE.txt",
+      "sha256": "0b09a83d3ef7795c7dec65e815866597c066c53898f2852a76599b8f5552941a"
+    },
+    "licenses/upstream/kotlin-jdk-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/JetBrains/kotlin/v1.9.10/license/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/kotlin-jdk-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/JetBrains/kotlin/v1.9.10/license/NOTICE.txt",
+      "sha256": "ea7099352103ade6a6918bc7efb00f8bcd43db0e76b2da2e83237c0bc0ff1b19"
+    },
+    "licenses/upstream/coroutines-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/Kotlin/kotlinx.coroutines/1.8.1/LICENSE.txt",
+      "sha256": "b1febe6399dffb10d19d35e7663ab16300c93cb0476a94115df1cc0097a8ffd8"
+    },
+    "licenses/upstream/coroutines-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/Kotlin/kotlinx.coroutines/1.8.1/license/NOTICE.txt",
+      "sha256": "421d45acbd92670b4131621a28fcbb41ba0b747d3a336cb13fca38c0685426c4"
+    },
+    "licenses/upstream/annotations-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/JetBrains/java-annotations/23.0.0/LICENSE.txt",
+      "sha256": "8c1e966c7855fb54027bcaf6ebe7a43abe4785791e8cf9148c363761d493d097"
+    },
+    "licenses/upstream/okhttp-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/square/okhttp/parent-4.12.0/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/okio-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/square/okio/parent-3.6.0/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/jspecify-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/jspecify/jspecify/v1.0.0/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/guava-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/google/guava/v26.0/COPYING",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/publicsuffix-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/square/okhttp/parent-4.12.0/okhttp/src/main/resources/okhttp3/internal/publicsuffix/NOTICE",
+      "sha256": "8a9c58fbded5ea3474315e4a9824ca8b1486098a1a03e897e0b19419d5e1876a"
+    },
+    "licenses/upstream/public_suffix_list.dat": {
+      "url": "https://raw.githubusercontent.com/square/okhttp/parent-4.12.0/okhttp/src/test/resources/okhttp3/internal/publicsuffix/public_suffix_list.dat",
+      "sha256": "e8b273972eb5a70e888bd3e7d7c5b9b04e600a59d69def9136a74d70ae6fcdd3"
+    },
+    "licenses/upstream/MPL-2.0.txt": {
+      "url": "https://www.mozilla.org/media/MPL/2.0/index.815ca599c9df.txt",
+      "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+    },
+    "licenses/upstream/androidx-LICENSE.txt": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/core/core/1.17.0/core-1.17.0.aar",
+      "archiveEntry": "META-INF/androidx/core/core/LICENSE.txt",
+      "sha256": "809fa1ed21450f59827d1e9aec720bbc4b687434fa22283c6cb5dd82a47ab9c0"
+    }
+  },
+  "androidProjects": {
+    ":capacitor-android": "@capacitor/android",
+    ":capacitor-cordova-android-plugins": "org.apache.cordova:framework:14.0.1"
+  },
+  "android": [
+    {
+      "name": "AndroidX",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/androidx-LICENSE.txt"
+      ],
+      "modules": [
+        "androidx.activity:activity:1.11.0",
+        "androidx.annotation:annotation-experimental:1.4.1",
+        "androidx.annotation:annotation-jvm:1.8.1",
+        "androidx.appcompat:appcompat-resources:1.7.1",
+        "androidx.appcompat:appcompat:1.7.1",
+        "androidx.arch.core:core-common:2.2.0",
+        "androidx.arch.core:core-runtime:2.2.0",
+        "androidx.collection:collection-jvm:1.4.2",
+        "androidx.concurrent:concurrent-futures:1.1.0",
+        "androidx.coordinatorlayout:coordinatorlayout:1.3.0",
+        "androidx.core:core-ktx:1.17.0",
+        "androidx.core:core-splashscreen:1.2.0",
+        "androidx.core:core-viewtree:1.0.0",
+        "androidx.core:core:1.17.0",
+        "androidx.cursoradapter:cursoradapter:1.0.0",
+        "androidx.customview:customview:1.0.0",
+        "androidx.drawerlayout:drawerlayout:1.0.0",
+        "androidx.emoji2:emoji2-views-helper:1.3.0",
+        "androidx.emoji2:emoji2:1.3.0",
+        "androidx.fragment:fragment:1.8.9",
+        "androidx.interpolator:interpolator:1.0.0",
+        "androidx.lifecycle:lifecycle-common:2.6.2",
+        "androidx.lifecycle:lifecycle-livedata-core:2.6.2",
+        "androidx.lifecycle:lifecycle-livedata:2.6.2",
+        "androidx.lifecycle:lifecycle-process:2.6.2",
+        "androidx.lifecycle:lifecycle-runtime:2.6.2",
+        "androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2",
+        "androidx.lifecycle:lifecycle-viewmodel:2.6.2",
+        "androidx.loader:loader:1.0.0",
+        "androidx.profileinstaller:profileinstaller:1.4.0",
+        "androidx.resourceinspection:resourceinspection-annotation:1.0.1",
+        "androidx.savedstate:savedstate:1.2.1",
+        "androidx.startup:startup-runtime:1.1.1",
+        "androidx.tracing:tracing:1.2.0",
+        "androidx.vectordrawable:vectordrawable-animated:1.1.0",
+        "androidx.vectordrawable:vectordrawable:1.1.0",
+        "androidx.versionedparcelable:versionedparcelable:1.1.1",
+        "androidx.viewpager:viewpager:1.0.0",
+        "androidx.webkit:webkit:1.14.0"
+      ]
+    },
+    {
+      "name": "Guava ListenableFuture",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/guava-LICENSE.txt"
+      ],
+      "modules": [
+        "com.google.guava:listenablefuture:1.0"
+      ]
+    },
+    {
+      "name": "OkHttp",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/okhttp-LICENSE.txt"
+      ],
+      "modules": [
+        "com.squareup.okhttp3:okhttp:4.12.0"
+      ]
+    },
+    {
+      "name": "Okio",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/okio-LICENSE.txt"
+      ],
+      "modules": [
+        "com.squareup.okio:okio-jvm:3.6.0"
+      ]
+    },
+    {
+      "name": "Apache Cordova",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/cordova-LICENSE.txt",
+        "licenses/upstream/cordova-NOTICE.txt"
+      ],
+      "modules": [
+        "org.apache.cordova:framework:14.0.1"
+      ]
+    },
+    {
+      "name": "Kotlin standard library",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/kotlin-LICENSE.txt",
+        "licenses/upstream/kotlin-NOTICE.txt"
+      ],
+      "modules": [
+        "org.jetbrains.kotlin:kotlin-stdlib:2.2.20"
+      ]
+    },
+    {
+      "name": "Kotlin JDK extensions",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/kotlin-jdk-LICENSE.txt",
+        "licenses/upstream/kotlin-jdk-NOTICE.txt"
+      ],
+      "modules": [
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10"
+      ]
+    },
+    {
+      "name": "Kotlin coroutines",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/coroutines-LICENSE.txt",
+        "licenses/upstream/coroutines-NOTICE.txt"
+      ],
+      "modules": [
+        "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.1"
+      ]
+    },
+    {
+      "name": "JetBrains Java annotations",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/annotations-LICENSE.txt"
+      ],
+      "modules": [
+        "org.jetbrains:annotations:23.0.0"
+      ]
+    },
+    {
+      "name": "JSpecify annotations",
+      "license": "Apache-2.0",
+      "files": [
+        "licenses/upstream/jspecify-LICENSE.txt"
+      ],
+      "modules": [
+        "org.jspecify:jspecify:1.0.0"
+      ]
+    }
+  ],
+  "data": [
+    {
+      "name": "Public Suffix List",
+      "version": "bundled with OkHttp 4.12.0",
+      "license": "MPL-2.0",
+      "files": [
+        "licenses/upstream/MPL-2.0.txt",
+        "licenses/upstream/publicsuffix-NOTICE.txt"
+      ],
+      "source": "licenses/upstream/public_suffix_list.dat"
+    }
+  ]
+}

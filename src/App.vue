@@ -4,6 +4,7 @@ import type { PluginListenerHandle } from '@capacitor/core'
 import { FishTts, nativeAvailable } from './native'
 import type { Configuration, PreviewStatus, VoiceProfile } from './native'
 import RemotePicker from './RemotePicker.vue'
+import OpenSourceLicenses from './OpenSourceLicenses.vue'
 import { loadOwnVoices, loadSynthesisModels } from './catalog'
 import type { CatalogOption } from './catalog'
 
@@ -368,5 +369,6 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
       </div>
     </section>
     <p id="page-status" class="notice" role="status">{{ pageMessage }}</p>
+    <OpenSourceLicenses />
   </main>
 </template>

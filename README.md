@@ -1,103 +1,28 @@
 # Fish Audio TTS for Android
 
-An Android system text-to-speech engine with a Vite, Vue and TypeScript settings panel packaged by Capacitor. The English panel uses ordinary HTML tables and form controls with a two-layer CSS design system: primitive scales and semantic role aliases. It has no UI library, decorative assets or downloaded fonts. Global configuration, the voice list and Preview form one scrolling document. The light surfaces, deep teal actions and responsive controls follow the approved mobile design; see [the design system](docs/design-system.md).
+Use Fish Audio voices in reading apps and other apps that support Android system text-to-speech. The English settings panel lets you manage voices and try them before reading.
 
-Android applications call the registered Kotlin `TextToSpeechService`. The service reads protected native configuration and contacts Fish Audio itself, so it works without an Activity or WebView running. The panel's preview is also a client of this system engine.
+Requires Android 7.0+, an internet connection, and your own [Fish Audio API key](https://fish.audio/app/api-keys) with sufficient credits.
 
-## Build and install
+## Quick start
 
-Requirements: Node.js 22.12 or later, npm, JDK 21, Android SDK Platform 36, Build Tools 36, and platform-tools. Android 7.0 / API 24 or later is supported; target SDK is 36.
+1. Install the APK and open **Fish Audio TTS**.
+2. Expand **Global configuration**, enter your key and press **Save API key**.
+3. Press **Add voice**, choose one of your voices or enter a **Reference ID**, then **Save voice**.
+4. Select the radio beside a saved voice to make it the default. Use **Preview** to try it.
+5. Press **Open system TTS settings**, choose **Fish Audio TTS**, then select Android system TTS in your reading app.
 
-```sh
-npm ci
-export JAVA_HOME=/path/to/jdk-21
-export ANDROID_HOME=/path/to/android-sdk
-npm run android:debug
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
+The engine works with the panel closed. Your key is encrypted in native Android storage; speech text goes directly to Fish Audio. An internet connection is required for synthesis.
 
-`android:debug` runs the Vue type check, Vite production build, Capacitor sync, and Gradle debug build. The debug APK uses the local Android debug signing key. For distribution, configure your own release signing in Android Studio.
+## Screenshots
 
-Useful individual commands:
+<p>
+  <img src="docs/screenshots/voices.png" alt="Voice list with a voice editor expanded" width="280">
+  <img src="docs/screenshots/preview.png" alt="Speech preview controls" width="280">
+</p>
 
-```sh
-npm run typecheck
-npm run build
-npm run test:ui
-npm run android:sync
-npm run android:test
-npm run android:lint
-# With an emulator or device attached:
-npm run android:device-test
-```
+## License
 
-Install Chromium once with `npx playwright install chromium` before running `test:ui`. It builds the production panel, checks test types, and runs browser behavior/layout checks against port 4173. Its controlled bridge fixtures do not contact Fish or prove native persistence. Device tests use the actual Android bridge/store; run them on a dedicated emulator and pass `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true` to the scoped Gradle task to keep the installed packages afterwards. See [verification details](docs/verification.md) for commands and live-test limits.
+[Apache-2.0](LICENSE). Third-party license texts are bundled in the APK and available offline under **Open source licenses**. Fish Audio services and voices have their own terms.
 
-For a browser-only view, run `npm run dev -- --host 127.0.0.1`. Native configuration, synthesis and system settings controls are disabled in browsers. There is no browser TTS fallback. A production preview can be started with `npm run preview -- --host 127.0.0.1` after building.
-
-The Vite and Capacitor CLIs created the project scaffolds. Application sources such as `android/app/build.gradle` and the manifest are maintained here; generated web assets, Capacitor configuration JSON, `capacitor.build.gradle`, `capacitor.settings.gradle`, lockfiles, Gradle output and APKs must be regenerated with their tools rather than edited.
-
-## Configure Fish Audio
-
-1. Open **Fish Audio TTS** on the Android device.
-2. Expand **Global configuration**, which starts collapsed and shows the key's saved status. Enter a key from the [Fish Audio API dashboard](https://fish.audio/app/api-keys), then press **Save API key**. Do not put it in source files, `.env`, or `VITE_*` variables.
-3. In **Voice list**, press **Add voice**. Its independent editor opens automatically. Saved items start collapsed; use their name/disclosure to edit. Each item has an optional label, **Reference ID**, optional model, and **Advanced parameters** containing **Prefix text** and optional JSON generation parameters. Open **Choose your voice** to query the saved key's workspace for your created/cloned TTS voices (`GET /model?self=true`, not favorites). Select a title/ID to fill **Reference ID**; an empty label is filled with the official title. Use **Load more** for additional pages. You can also paste a public or otherwise accessible Reference ID manually; this voice ID is separate from the synthesis model. No Reference ID or credential is preconfigured. Prefix text defaults to empty and is prepended literally to every request for that voice, including previews. Include a trailing space or newline if needed; whitespace is preserved and no separator is inserted.
-4. Open **Model** to fetch the `model` request-header `enum` for `POST /v1/tts` from [Fish's public OpenAPI schema](https://api.fish.audio/openapi.json). The choices display the exact slugs, such as `s1` or `drama-3`, without a local name mapping or hardcoded model list. Select a slug, or leave **Upstream default** to omit the header. Local persistence checks slug syntax; upstream controls model availability and account access. A catalog entry does not guarantee access to synthesis with that model, which can require credits.
-5. Leave generation parameters blank to omit optional generation controls, or enter a JSON object such as `{"temperature":0.7,"prosody":{"speed":1.2,"volume":-3}}`. These are Fish's actual body parameters. Nested `prosody` values merge with system values; see the precedence rule below. Audio uses Opus with automatic bitrate (`opus_bitrate: -1000`) by default. Set `opus_bitrate` to `24000`, `32000`, `48000`, or `64000` to choose an explicit bitrate in bps. Text, reference selection, model header, format and sample rate have dedicated handling and cannot be replaced through this JSON field.
-6. Press **Save voice** inside that profile to persist it. Only that profile is validated and updated; other drafts and open editors stay intact, even if another draft has invalid JSON. The editor stays open with its own save/error feedback. **Remove voice** persists removal of that profile alone, or discards a new unsaved row. Up to 50 profiles can be saved, including profiles using the same Fish reference with different generation parameters.
-7. Select the radio beside a saved profile in **Voice list** to make it the system default. This saves immediately; opening a profile never selects its radio. Save new/edited non-default profiles before choosing them. The **Default** badge marks the confirmed saved choice, and a failed selection restores the previous radio. This applies when an Android client has not selected a particular voice. The first saved profile is initially the default. Editing it preserves its saved behavior until that row is saved; deleting it selects the first remaining saved profile, or none if the list is empty. Existing clients that have selected a Voice keep it; reinitialize the client or select its language again to obtain the current default.
-8. Select a saved **Voice** and **Language** in the preview, choose **Speed** from 0.5 to 2.0 (default 1.0), enter text and press **Start preview**. The speed is applied through Android's `TextToSpeech.setSpeechRate`; 1.5 becomes Android rate 150 and then Fish `prosody.speed: 1.5`. **Pitch** is always disabled because Fish has no pitch parameter. The state reports initialization, synthesis, playback, completion or errors. **Stop preview** cancels the system request and playback.
-
-The key and every voice save independently. Key/default changes preserve all voice drafts, and a voice save preserves the key and other profiles. Preview requires saving its selected profile and any typed key; unrelated voice drafts do not block it. A saved key is write-only from the panel: leaving its field blank preserves it, and successful saves clear the field. **Delete API key** atomically removes the credential while preserving encrypted voice profiles and their default selection. Saving checks local data shape, not authentication or voice access. A previously saved single-voice configuration is retained as one list item.
-
-The radio and editor disclosure have separate touch targets. Long names/IDs wrap inside headers and remote choices; native Preview option labels are shortened while their full values remain in the editor/title and are persisted unchanged. **Generation rules** contains parameter notes and official links. Android resizes the content area for the software keyboard, so the focused field and remaining document can be reached by scrolling.
-
-Both remote pickers query again on expansion, without blocking the panel. HTML disclosure lists show asynchronous results, English loading/errors, **Retry** and pagination while open. Upstream model and voice choices display in reverse response order; **Upstream default** stays first. Additional voice pages are reversed together with the already loaded choices. Selecting a choice edits that draft; press its **Save voice** to persist it. Failed/empty queries do not replace saved selections or manual IDs. Results stay in memory and are discarded when closed or the saved key changes. Catalog traffic runs in the native plugin with a 25-second request limit and an 8 MiB response limit; only the voice-list request receives the saved key. No credential is sent when reading the public schema.
-
-All configuration is stored as AES-256-GCM ciphertext in the app's private, credential-protected `noBackupFilesDir`. The encryption key is held by Android Keystore. Backups, Capacitor bridge logging and WebView debugging are disabled. Keys are never returned by `getConfiguration`, saved in browser storage, or placed in builds or logs. The service can use the store after the device's first unlock following a reboot. Uninstalling or clearing app data removes configuration.
-
-## Choose the system engine
-
-1. Press **Open system TTS settings**. On devices that do not handle the AOSP TTS settings action, the button opens Accessibility settings; search Android Settings for **Text-to-speech** if necessary.
-2. Select **Fish Audio TTS** as the preferred engine. Confirm Android's engine-selection dialog if shown.
-3. Select a supported language and play Android's sample. The engine needs an internet connection and the saved Fish credentials.
-
-Each saved profile exposes one network Voice per supported locale, named `fish:<profile-id>:<reference-id>:<language-tag>`. A profile's stable ID distinguishes rows sharing a Fish Reference ID. Supported locales are `en-US`, `zh-CN`, `ja-JP`, `ko-KR`, `de-DE`, `fr-FR`, `es-ES`, `pt-BR`, `it-IT`, `ru-RU`, `ar-SA`, `nl-NL`, and `pl-PL`. This is a conservative subset of Fish's documented multilingual capability. ISO-639 two- and three-letter language queries are handled; unknown languages and deleted/stale/unknown Voice names are rejected. Locale variants and additional regional accents are not advertised. The reference voice determines the accent.
-
-Android's **Check TTS data** action reports whether native credentials and at least one profile are configured, and returns the Android-format available/unavailable locale lists. It does not claim that the remote account has been authenticated. **Install TTS data** opens configuration because there is no offline voice package. The settings Activity is declared in `tts_engine.xml`, and all system-facing components have explicit exported declarations. The service is an ordinary bound TTS service and needs no running frontend, boot receiver, or foreground Activity.
-
-## Verify from another application
-
-After selecting the default engine, use a reading application that supports **Android system TTS** and choose its system-engine mode. Close the Fish Audio panel and request English or Chinese speech from that app. Check rate changes and its stop button. Then remove Fish Audio from Recents and repeat. To check a cold process, reboot, unlock the device, and request speech before opening Fish Audio TTS.
-
-An Android developer can explicitly select this engine with `TextToSpeech(context, listener, "com.fishaudio.tts")`, or omit the package to use the system default. After initialization, inspect `tts.voices`, select the desired `fish:<profile-id>:<reference-id>:<locale>` Voice, set `tts.setSpeechRate(...)`, and call `tts.speak(...)` or `tts.synthesizeToFile(...)`. For Android 11+, the calling app needs package visibility:
-
-```xml
-<queries>
-    <intent>
-        <action android:name="android.intent.action.TTS_SERVICE" />
-    </intent>
-</queries>
-```
-
-Register an `UtteranceProgressListener` to observe `onDone`, `onStop`, or `onError`. Refresh voices after adding/removing profiles or changing a Reference ID. Editing a label, prefix or parameters preserves the profile's Voice identity; removed or replaced references invalidate previous names. Test an unavailable network and an invalid key to verify errors. Android clients receive decoded PCM; `synthesizeToFile` still produces a WAV file. Real Fish Opus synthesis through the system client to a file passed on an API 35 emulator. Audible playback and ordinary third-party reading applications still require physical-device verification; see [verification details](docs/verification.md).
-
-## Synthesis contract and limits
-
-The native client sends `POST https://api.fish.audio/v1/tts` using the global bearer key and the selected profile. It starts with a deep copy of that row's generation parameters, then overlays supplied system values. The system Voice selects the profile/Reference ID; system text, locale and speech rate take priority. The outgoing `text` is exactly `profile.prefixText + systemText`, composed once inside native synthesis without trimming, adding a separator, or changing the original input. Old profiles without a prefix use an empty string. A system rate of 120 becomes `prosody.speed: 1.2`, replacing a table speed rather than multiplying it; other fields such as `prosody.volume` are preserved. Missing system values fall back to table values. Fields missing from both are omitted, allowing upstream defaults. A blank model omits the `model` header. No local temperature, normalization, latency, model or speed defaults are inserted.
-
-Android normally supplies a speech rate even when an application has not explicitly set one. Its default rate therefore also takes priority over a table speed. System rates are converted from percent to a multiplier and forwarded without clamping; Fish's documented supported range is 0.5–2.0 and out-of-range requests may be rejected upstream. Android volume stays in Android's playback layer, separately from Fish's `prosody.volume` in decibels. Fish has no documented pitch parameter, so pitch requests cannot be applied. Transport always sends `format: "opus"` and `sample_rate: 48000`; `opus_bitrate: -1000` is inserted only when the profile does not supply it. Automatic mode delegates bitrate selection to Fish; no fixed bitrate or compression ratio is assumed. Explicit profile bitrates are preserved. Opus is lossy; lower bitrate trades fidelity for bandwidth, and encoding/page buffering can affect latency.
-
-Ogg pages are read progressively, with checksum, page sequence, stream identity, mono Opus header, packet continuation and end-of-stream validation. Only the current page and packet are retained. Android's `MediaCodec` decodes each packet before the next network read; the engine removes Opus pre-skip and final granule padding, then emits only 48 kHz mono PCM16 through `SynthesisCallback.start(48000, ENCODING_PCM_16BIT, 1)` and `audioAvailable`. Callback chunks contain complete PCM frames and never exceed `getMaxBufferSize()`. The decoder is released on completion, stop and errors. Empty, corrupt, truncated, oversized, chained and multiplexed responses fail. Packets/metadata are limited to 64 KiB. Synthesis runs synchronously on Android's synthesis thread, including `error` and `done`; no callback escapes `onSynthesizeText`.
-
-`onStop` sets an atomic cancellation flag and cancels the active OkHttp call without acquiring a synthesis lock. Requests have a 15-second connection/write timeout, a 30-second read timeout and a 120-second total call timeout. Encoded responses are bounded to 32 MiB and decoded PCM to 64 MiB; a decoder making no progress fails after five seconds. Original system text and each profile's prefix are independently bounded to 4,000 UTF-16 code units, so the combined outgoing text can contain up to 8,000. Redirects and automatic retries are disabled. HTTP failures use Android error categories; untrusted upstream response bodies and credentials are not displayed or logged. There is no offline synthesis, downloaded voice cache or automatic billing retry.
-
-## Official references
-
-- [Fish Audio TTS endpoint](https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech), [live OpenAPI schema](https://api.fish.audio/openapi.json), [voice listing and self filter](https://docs.fish.audio/api-reference/endpoint/model/list-models), [models](https://docs.fish.audio/developer-guide/models-pricing/models-overview), [quickstart / Reference IDs](https://docs.fish.audio/developer-guide/getting-started/quickstart).
-- [Capacitor setup](https://capacitorjs.com/docs/getting-started/environment-setup), [local Android plugins](https://capacitorjs.com/docs/android/custom-code), [Android plugin API](https://capacitorjs.com/docs/plugins/android), [native inset handling](https://github.com/ionic-team/capacitor/blob/8.5.3/core/system-bars.md).
-- [Android TextToSpeechService](https://developer.android.com/reference/android/speech/tts/TextToSpeechService), [SynthesisCallback](https://developer.android.com/reference/android/speech/tts/SynthesisCallback), [Voice](https://developer.android.com/reference/android/speech/tts/Voice), [TTS data protocol](https://developer.android.com/reference/android/speech/tts/TextToSpeech.Engine), [Android Keystore](https://developer.android.com/privacy-and-security/keystore).
-- [Android keyboard visibility and layout resizing](https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility), [native HTML disclosure controls](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details).
-- [Android MediaCodec / Opus codec-specific data](https://developer.android.com/reference/android/media/MediaCodec), [Ogg Opus framing and trimming](https://www.rfc-editor.org/rfc/rfc7845), [Ogg framing and checksum](https://www.rfc-editor.org/rfc/rfc3533).
-
-Implementation verification and remaining device/API checks are recorded in [docs/verification.md](docs/verification.md).
+[User guide](docs/usage.md) · [Build and development](docs/development.md) · [Verification](docs/verification.md)

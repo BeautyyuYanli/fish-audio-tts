@@ -1,12 +1,28 @@
 # Verification
 
+## Version 1.1.3
+
+Version 1.1.3 (version code 12) distributes the project's Apache-2.0 LICENSE/NOTICE and complete third-party license texts. The generator collects 30 npm package notices, including runtime helper authors, 50 Android runtime modules and the Public Suffix List. The latter includes MPL-2.0, the original notice and the exact corresponding source data. Every debug/release assets merge checks the resolved dependency inventory and native notice contents at build time. The installed app only displays bundled text on request; it performs no license checks.
+
+- Frontend type check/production build and all 11 Playwright checks passed, including full license texts, error/retry, draft retention, local-only license loading and 320 px layout.
+- Android debug build, all 13 native unit checks and lint passed. Both debug/release dependency-license checks passed. Injecting an additional real runtime dependency through a temporary Gradle init script caused the expected missing-license build failure; repository inputs and generated files were not edited for that check.
+- The installed APK's new license-view instrumentation check passed on the original API 35 emulator with WebView network loads blocked. The native app served all notices locally. README screenshots were captured from this actual APK with example profiles and a non-credential; original native settings were restored afterwards. No live Fish synthesis was requested for this release.
+- Ordinary `adb install -r` upgraded code 11 to code 12 before instrumentation; the encrypted configuration was byte-for-byte unchanged. APK Signature Scheme v2 verification passed. Scanning every APK entry found no Fish credential/private-key patterns and no encoded test-audio fixtures.
+- The packaged Public Suffix List source matches all 9,499 rules and 8 exceptions in OkHttp's compressed resource.
+
+Artifact: `android/app/build/outputs/apk/debug/app-debug.apk`, 4,992,264 bytes. SHA-256: `f20262cd93baefda2a0097fe6049b1b4fffea85c7312f23c8e04e12a5c140814`.
+
+To regenerate the two README screenshots, run the scoped device test on a dedicated emulator with `-Pandroid.testInstrumentationRunnerArguments.class=com.fishaudio.tts.EngineIntegrationTest#bundledLicensesAreReadableWithNetworkLoadsBlocked`, `-Pandroid.testInstrumentationRunnerArguments.captureScreenshots=true` and `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true`. Pull `/sdcard/Android/data/com.fishaudio.tts/cache/screenshots/` into `docs/screenshots/` using `adb pull`. These example-data images demonstrate the real installed UI, not successful upstream speech.
+
+## Earlier engine verification
+
 The current source sends `opus_bitrate: -1000` when a profile omits its bitrate, preserving explicit profile values. Remote voice/model choices display in reverse upstream order across all loaded pages, with the local **Upstream default** option first.
 
 For these changes, `npm run test:ui` passed all 9 browser checks, including reverse model order and combined voice-page order. Capacitor sync, the Android debug build and all 19 `FishSynthesizerTest` instrumentation checks passed on the original API 35 emulator. The native fixtures verify the outgoing automatic value, preservation of an explicit bitrate and decoding with the actual Android codec. No live Fish request was made for automatic mode.
 
 Version 1.1.2 (version code 11) packages these changes. `npm run android:debug` passed the frontend type check/build, Capacitor sync and native debug build. APK Signature Scheme v2 verification passed, and a scan of all APK entries found no Fish credential-pattern matches. Ordinary `adb install -r` upgraded code 10 to code 11 on the original API 35 emulator; the encrypted native configuration remained byte-for-byte unchanged.
 
-- Latest APK: `android/app/build/outputs/apk/debug/app-debug.apk`
+- Previous APK: `android/app/build/outputs/apk/debug/app-debug.apk`
 - Version: 1.1.2 (version code 11)
 - Size: 4,793,298 bytes
 - SHA-256: `bcad5e9e7aaabbe7e1ce7646889795301956d976b7e9c8200659e851928f1e04`
@@ -29,7 +45,7 @@ A supplied Fish credential was delivered to native code through one-shot sockets
 | Android SDK | compile / target 36; minimum 24 |
 | Emulator | Android 15 / API 35, Google APIs x86_64, isolated `FishTts_API_35` AVD |
 
-This machine's build used `JAVA_HOME=/home/beautyyu/.cache/rosemary-build/jdk-21` and `ANDROID_HOME=/home/beautyyu/opt/android-sdk`. These are local tool locations, not required project paths.
+Set `JAVA_HOME` to a JDK 21 installation and `ANDROID_HOME` to your Android SDK; no machine-specific project paths are required. See [development.md](development.md) for the build steps.
 
 ## Passing checks
 

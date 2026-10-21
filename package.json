@@ -1,7 +1,7 @@
 {
   "name": "fish-audio-tts",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,10 @@
     "android:debug": "npm run android:sync && cd android && ./gradlew :app:assembleDebug",
     "android:test": "cd android && ./gradlew :app:testDebugUnitTest",
     "android:device-test": "cd android && ./gradlew :app:connectedDebugAndroidTest",
-    "android:lint": "cd android && ./gradlew :app:lintDebug"
+    "android:lint": "cd android && ./gradlew :app:lintDebug",
+    "licenses": "node tools/generate-licenses.mjs",
+    "prebuild": "npm run licenses",
+    "predev": "npm run licenses"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -29,5 +32,6 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vue-tsc": "^3.3.13"
-  }
+  },
+  "license": "Apache-2.0"
 }

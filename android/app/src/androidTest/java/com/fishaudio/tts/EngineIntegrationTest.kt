@@ -416,6 +416,66 @@ class EngineIntegrationTest {
         }
     }
 
+    @Test fun bundledLicensesAreReadableWithNetworkLoadsBlocked() {
+        // This exercises Capacitor's real local asset server in the installed APK,
+        // rather than a browser fixture or a cached remote license page.
+        val notices = context.assets.open("public/licenses/notices.json").bufferedReader().use { JSONObject(it.readText()) }
+        val components = notices.getJSONArray("components")
+        assertTrue(components.length() > 0)
+        assertTrue(context.assets.open("public/licenses/public_suffix_list.dat").use { it.read() } >= 0)
+        val captureScreenshots = InstrumentationRegistry.getArguments().getString("captureScreenshots") == "true"
+        if (captureScreenshots) {
+            // Documentation images use only example profiles and a non-credential;
+            // the existing setup/cleanup restores the emulator's original settings.
+            store.saveVoices(listOf(profile(label = "Reading voice"), profile("second", secondReference, "Narrator")))
+            store.saveApiKey(testKey)
+        }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.getElementById('open-source-licenses') !== null")
+            if (captureScreenshots) {
+                awaitJs(scenario, "document.getElementById('page-status').textContent === 'Configuration loaded.'")
+                expandVoice(scenario, 0)
+                evaluate(scenario, "window.scrollTo(0, 0)")
+                captureScreenshot("voices.png")
+                evaluate(scenario, "document.getElementById('preview-heading').scrollIntoView()")
+                awaitJs(scenario, "window.scrollY > 0 && document.getElementById('preview-heading').getBoundingClientRect().top < 100")
+                captureScreenshot("preview.png")
+            }
+            scenario.onActivity { activity -> activity.bridge.webView.settings.blockNetworkLoads = true }
+            evaluate(scenario, "document.getElementById('open-source-licenses').open = true")
+            awaitJs(scenario, "document.querySelectorAll('.license-component').length === ${components.length()}")
+            evaluate(scenario, """
+                Array.from(document.querySelectorAll('.license-component')).forEach(element => element.open = true)
+            """.trimIndent())
+            assertEquals("true", evaluate(scenario, """
+                (() => {
+                  const text = document.getElementById('open-source-licenses').innerText;
+                  return text.includes('Permission is hereby granted, free of charge') &&
+                    text.includes('Drifty Co.') && text.includes('Yuxi (Evan) You') &&
+                    text.includes('The Apache Software Foundation') &&
+                    text.includes('Mozilla Public License Version 2.0') &&
+                    document.documentElement.scrollWidth <= document.documentElement.clientWidth;
+                })()
+            """.trimIndent()))
+        }
+    }
+
+    /** Optional real-APK documentation output, never run with a user's credentials in the panel. */
+    private fun captureScreenshot(name: String) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.waitForIdle(200, 5_000)
+        // UI idle does not wait for WebView's compositor to present a scroll.
+        SystemClock.sleep(700)
+        val bitmap = checkNotNull(automation.takeScreenshot())
+        try {
+            val output = File(context.externalCacheDir, "screenshots/$name")
+            check(output.parentFile!!.mkdirs() || output.parentFile!!.isDirectory)
+            output.outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     private fun expandVoice(scenario: ActivityScenario<MainActivity>, index: Int) {
         evaluate(scenario, """
             (() => {

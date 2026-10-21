@@ -66,4 +66,8 @@ details[open] > .disclosure::after, .voice-toggle[aria-expanded=true]::after { t
 .rules { margin-block-start: var(--space-field); }
 .rules > summary { min-block-size: var(--control-min-height); display: flex; align-items: center; justify-content: space-between; gap: var(--space-field); font-size: var(--text-small); color: var(--color-text-secondary); }
 .rules p + p { margin-block-start: var(--space-small); }
+.license-component { border-block-start: var(--border-width) solid var(--color-divider); margin-block-start: var(--space-field); padding-block-start: var(--space-small); }
+.license-component > summary { min-block-size: var(--control-min-height); display: flex; align-items: center; justify-content: space-between; gap: var(--space-small); overflow-wrap: anywhere; }
+.license-packages { padding-inline-start: var(--space-group); overflow-wrap: anywhere; }
+.license-text { white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-small) / var(--line-small) var(--font-code); margin-block: var(--space-field); }
 .visually-hidden { position: absolute; inline-size: var(--border-width); block-size: var(--border-width); padding: var(--space-none); margin: var(--space-none); overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: none; }
