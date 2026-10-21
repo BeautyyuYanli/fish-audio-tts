@@ -21,6 +21,7 @@ The engine works with the panel closed. Your key is encrypted in native Android 
 <p>
   <img src="docs/screenshots/voices.png" alt="Voice list with a voice editor expanded" width="280">
   <img src="docs/screenshots/preview.png" alt="Speech preview controls" width="280">
+  <img src="docs/screenshots/system-tts-settings.jpg" alt="Android text-to-speech settings with Fish Audio TTS selected as the preferred engine" width="280">
 </p>
 
 ## License
