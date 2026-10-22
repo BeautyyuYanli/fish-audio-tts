@@ -1,5 +1,13 @@
 # Verification
 
+## Version 1.1.4
+
+Version 1.1.4 (version code 13) combines optional Continuous synthesis with the global **Use system language** switch. The switch defaults to off (`unset`), sends an explicit empty language over both HTTP and WebSocket, and disables the Preview language selector. Original HTTP/Opus remains the default synthesis mode.
+
+The merged source passed all 13 UI checks, 29 native unit checks and 38 Android integration checks on the dedicated API 35 emulator; two opt-in live-account checks were skipped. Regression checks cover independent persistence of language and synthesis mode, preservation of unrelated drafts, failure rollback, Activity recreation, Preview enablement, explicit empty languages in both transports, and fresh WebSocket contexts when the effective language changes. Tests restore the original native configuration, including both global settings.
+
+The production panel build, Capacitor sync, local release APK assembly and release lint passed. The APK manifest reports version 1.1.4 / code 13. Bundled licenses passed verification for 51 Android runtime modules and two native projects. The local release APK is unsigned; the GitHub Release workflow signs the distributed APK with the existing release key and publishes its SHA-256 checksum. Live Fish synthesis and continuous-mode audio quality were not retested for this version.
+
 ## Optional continuous mode (development)
 
 Verified locally on 2026-10-23. Global configuration offers Original (the preserved HTTP/Opus default, including existing saved configurations) and Continuous. The new mode sends one WebSocket `start` with `condition_on_previous_chunks: true`, then `text`/`flush` per Android segment. A 500 ms audio gap finishes each segment while retaining the connection for 180 idle seconds.
