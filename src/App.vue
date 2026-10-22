@@ -28,6 +28,10 @@ const hasApiKey = ref(false)
 const globalOpen = ref(false)
 const keyMessage = ref('')
 const keyError = ref(false)
+const synthesisMode = ref<Configuration['synthesisMode']>('http')
+const modeSelection = ref<Configuration['synthesisMode']>('http')
+const modeMessage = ref('')
+const modeError = ref(false)
 const savedVoices = ref<VoiceProfile[]>([])
 const defaultVoiceId = ref('')
 const defaultSelection = ref('')
@@ -94,6 +98,8 @@ function makeDraft(profile?: VoiceProfile): VoiceDraft {
 function applyConfiguration(config: Configuration) {
   if (disposed) return
   hasApiKey.value = config.hasApiKey
+  synthesisMode.value = config.synthesisMode
+  modeSelection.value = config.synthesisMode
   savedVoices.value = config.voices
   defaultVoiceId.value = config.defaultVoiceId
   defaultSelection.value = config.defaultVoiceId
@@ -129,6 +135,21 @@ async function deleteApiKey() {
     keyMessage.value = 'API key deleted. Saved voices were preserved.'
   } catch (error) { keyError.value = true; keyMessage.value = errorText(error) }
   finally { mutationBusy.value = false }
+}
+
+async function setSynthesisMode() {
+  if (mutationDisabled.value) { modeSelection.value = synthesisMode.value; return }
+  mutationBusy.value = true
+  modeError.value = false
+  modeMessage.value = 'Saving synthesis mode...'
+  try {
+    applyConfiguration(await FishTts.setSynthesisMode({ synthesisMode: modeSelection.value }))
+    modeMessage.value = 'Synthesis mode saved.'
+  } catch (error) {
+    modeSelection.value = synthesisMode.value
+    modeError.value = true
+    modeMessage.value = errorText(error)
+  } finally { mutationBusy.value = false }
 }
 
 function addVoice() {
@@ -253,6 +274,17 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
         <span class="summary-copy">Global configuration<span class="helper">{{ hasApiKey ? 'API key saved' : 'No API key saved' }}</span></span>
       </summary>
       <form class="panel-body" novalidate @submit.prevent="saveApiKey">
+        <div>
+          <label for="synthesis-mode">Synthesis mode</label>
+          <select id="synthesis-mode" v-model="modeSelection" :disabled="mutationDisabled" aria-describedby="synthesis-mode-help" @change="setSynthesisMode">
+            <option value="http">Original</option>
+            <option value="continuous">Continuous</option>
+          </select>
+          <p id="synthesis-mode-help" class="helper">{{ synthesisMode === 'continuous'
+            ? 'Continues the voice context between segments. A 500 ms audio gap ends each segment; the connection stays open for 3 idle minutes. Uses more data and may cut off delayed speech.'
+            : 'Generates each segment independently. Uses compressed audio to reduce data usage.' }}</p>
+          <p v-if="modeMessage" class="notice" :class="{ error: modeError, success: !modeError }" :role="modeError ? 'alert' : 'status'">{{ modeMessage }}</p>
+        </div>
         <table class="fields" role="presentation"><tbody><tr><td>
           <label for="api-key">API key</label>
           <input id="api-key" v-model="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" :disabled="mutationDisabled" :placeholder="hasApiKey ? 'Keep saved key' : 'Enter API key'" />

@@ -1,5 +1,18 @@
 # Verification
 
+## Optional continuous mode (development)
+
+Verified locally on 2026-10-23. Global configuration offers Original (the preserved HTTP/Opus default, including existing saved configurations) and Continuous. The new mode sends one WebSocket `start` with `condition_on_previous_chunks: true`, then `text`/`flush` per Android segment. A 500 ms audio gap finishes each segment while retaining the connection for 180 idle seconds.
+
+- All 12 Playwright checks passed, including independent mode saves, preservation of unsaved key/voice drafts, failure rollback and existing responsive/preview/catalog behavior. The production build and Capacitor sync passed.
+- All 28 native unit checks passed. The 15 new checks use actual local WebSocket handshakes and MessagePack frames to verify a single start across segments, flushes, parameter precedence, exact prefixes, PCM frame/buffer boundaries and synthesis-thread callbacks. They also cover 500 ms timing after the last audio, first-audio timeout, idle expiry/reuse, changed callers/configuration, idle late audio, stop/destruction, rejected output, malformed/truncated audio, upstream completion/disconnect and HTTP handshake errors without automatic replay. Idle expiry uses a shortened injected timeout; production's default is 180 seconds.
+- On the dedicated `FishTts_API_35` emulator, 35 instrumentation checks passed and the two opt-in live-account checks skipped. This includes all 19 existing HTTP/Opus synthesis checks and mode persistence across independent native mutations, deletion/restoration of the key, actual WebView bridge saves and Activity recreation. Tests restore the prior mode as well as prior credentials/voices.
+- Android debug packaging and lint passed (0 errors; the existing 22 warnings). Debug/release license inventory checks passed for 51 Android runtime modules. The APK includes the reviewed MessagePack 0.9.12 license/notice and excludes encoded test-audio fixtures. APK Signature Scheme v2 verification passed.
+
+Artifact: `android/app/build/outputs/apk/debug/app-debug.apk`, 8,857,904 bytes. SHA-256: `829c1245ea1bdb27a46b61bd9d731d0f4e6bba2fcc8b291e4f0f96d2d48f0744`.
+
+Continuous mode uses 44.1 kHz mono PCM16, increasing bandwidth relative to Original's Opus. The 500 ms rule is heuristic and can truncate or misattribute audio during long upstream/network pauses. No real Fish synthesis, cross-segment quality comparison, three-minute upstream idle soak or physical-device continuous playback was performed for this change; local peers establish client behavior only. See [the synthesis contract](development.md#continuous-websocket-mode).
+
 ## Version 1.1.3
 
 Version 1.1.3 (version code 12) distributes the project's Apache-2.0 LICENSE/NOTICE and complete third-party license texts. The generator collects 30 npm package notices, including runtime helper authors, 50 Android runtime modules and the Public Suffix List. The latter includes MPL-2.0, the original notice and the exact corresponding source data. Every debug/release assets merge checks the resolved dependency inventory and native notice contents at build time. The installed app only displays bundled text on request; it performs no license checks.

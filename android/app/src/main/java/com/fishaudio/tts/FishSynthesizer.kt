@@ -17,20 +17,21 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-/** Lock-free cross-thread stop handle. Publishing a call after cancellation cancels it immediately. */
+/** Lock-free stop handle for either transport. Publishing a cancellation action after stop runs it immediately. */
 class SynthesisSession {
     private val cancelled = AtomicBoolean(false)
-    private val call = AtomicReference<Call?>(null)
+    private val cancellation = AtomicReference<(() -> Unit)?>(null)
 
-    fun cancel() { cancelled.set(true); call.get()?.cancel() }
-    fun attach(value: Call) { call.set(value); if (cancelled.get()) value.cancel() }
-    fun release() { call.set(null) }
+    fun cancel() { cancelled.set(true); cancellation.get()?.invoke() }
+    fun attach(value: Call) = attach { value.cancel() }
+    fun attach(action: () -> Unit) { cancellation.set(action); if (cancelled.get()) action() }
+    fun release() { cancellation.set(null) }
     fun isCancelled(): Boolean = cancelled.get()
     fun check() { if (cancelled.get()) throw SynthesisCancelled() }
 }
 
-private class SynthesisCancelled : IOException()
-private class SynthesisFailure(val code: Int) : IOException()
+internal class SynthesisCancelled : IOException()
+internal class SynthesisFailure(val code: Int) : IOException()
 
 /**
  * Blocking network synthesis: the framework owns the synthesis thread and callback lifetime.

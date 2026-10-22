@@ -43,11 +43,21 @@ class VoiceProfile(
     }
 }
 
-/** The saved default uses stable profile identity; old configurations and deleted defaults use the first remaining voice. */
+enum class SynthesisMode(val value: String) {
+    HTTP("http"), CONTINUOUS("continuous");
+
+    companion object {
+        fun fromValue(value: String): SynthesisMode = entries.firstOrNull { it.value == value }
+            ?: throw IllegalArgumentException("Select a valid synthesis mode.")
+    }
+}
+
+/** The saved default uses stable profile identity; old configurations retain independent HTTP synthesis. */
 class EngineConfiguration(
     val apiKey: String = "",
     val voices: List<VoiceProfile> = emptyList(),
     preferredVoiceId: String = "",
+    val synthesisMode: SynthesisMode = SynthesisMode.HTTP,
 ) {
     val defaultVoice: VoiceProfile? = voices.firstOrNull { it.id == preferredVoiceId } ?: voices.firstOrNull()
     val defaultVoiceId: String get() = defaultVoice?.id.orEmpty()

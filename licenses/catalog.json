@@ -5,6 +5,14 @@
     "rolldown"
   ],
   "sources": {
+    "licenses/upstream/msgpack-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/msgpack/msgpack-java/v0.9.12/LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/upstream/msgpack-NOTICE.txt": {
+      "url": "https://raw.githubusercontent.com/msgpack/msgpack-java/v0.9.12/NOTICE",
+      "sha256": "a6af52473ba50eae58b035a2e6bbd0ec0631d44d6dfe31d5dd2d34308f1dab5d"
+    },
     "LICENSE": {
       "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
@@ -84,6 +92,12 @@
     ":capacitor-cordova-android-plugins": "org.apache.cordova:framework:14.0.1"
   },
   "android": [
+    {
+      "name": "MessagePack for Java",
+      "license": "Apache-2.0",
+      "files": ["licenses/upstream/msgpack-LICENSE.txt", "licenses/upstream/msgpack-NOTICE.txt"],
+      "modules": ["org.msgpack:msgpack-core:0.9.12"]
+    },
     {
       "name": "AndroidX",
       "license": "Apache-2.0",

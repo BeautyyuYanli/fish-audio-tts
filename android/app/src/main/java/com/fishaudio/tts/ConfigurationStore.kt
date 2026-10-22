@@ -31,7 +31,7 @@ class ConfigurationStore(context: Context) {
         val previous = readLocked()
         val value = apiKey.trim().ifEmpty { previous.apiKey }
         require(value.matches(Regex("[!-~]{1,4096}"))) { "Enter a valid Fish Audio API key without spaces." }
-        writeLocked(EngineConfiguration(value, previous.voices, previous.defaultVoiceId))
+        writeLocked(EngineConfiguration(value, previous.voices, previous.defaultVoiceId, previous.synthesisMode))
     }
 
     fun saveVoices(voices: List<VoiceProfile>): EngineConfiguration = synchronized(lock) {
@@ -39,7 +39,7 @@ class ConfigurationStore(context: Context) {
         voices.forEach { it.validate() }
         require(voices.map { it.id }.distinct().size == voices.size) { "Voice profile IDs must be unique." }
         val previous = readLocked()
-        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId))
+        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode))
     }
 
     /** Read-modify-write by stable profile ID; never accept another editor's draft snapshot. */
@@ -50,31 +50,39 @@ class ConfigurationStore(context: Context) {
         require(index >= 0 || previous.voices.size < 50) { "Save at most 50 voice profiles." }
         val voices = previous.voices.toMutableList()
         if (index >= 0) voices[index] = voice else voices.add(voice)
-        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId))
+        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode))
     }
 
     /** Removal affects one persisted profile; EngineConfiguration supplies the default fallback. */
     fun removeVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         require(previous.voices.any { it.id == voiceId }) { "Select a saved voice to remove." }
-        writeLocked(EngineConfiguration(previous.apiKey, previous.voices.filterNot { it.id == voiceId }, previous.defaultVoiceId))
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices.filterNot { it.id == voiceId }, previous.defaultVoiceId, previous.synthesisMode))
     }
 
     fun saveDefaultVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         require(previous.voices.any { it.id == voiceId }) { "Select a saved voice as the system default." }
-        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, voiceId))
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, voiceId, previous.synthesisMode))
+    }
+
+    /** Mode selection is independent of the write-only key and individual voice editors. */
+    fun saveSynthesisMode(mode: SynthesisMode): EngineConfiguration = synchronized(lock) {
+        val previous = readLocked()
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, previous.defaultVoiceId, mode))
     }
 
     fun deleteApiKey(): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
-        writeLocked(EngineConfiguration(voices = previous.voices, preferredVoiceId = previous.defaultVoiceId))
+        writeLocked(EngineConfiguration(voices = previous.voices, preferredVoiceId = previous.defaultVoiceId,
+            synthesisMode = previous.synthesisMode))
     }
 
     private fun writeLocked(config: EngineConfiguration): EngineConfiguration {
         val json = JSONObject().put("apiKey", config.apiKey)
             .put("voices", JSONArray(config.voices.map { it.toJson() }))
             .put("defaultVoiceId", config.defaultVoiceId)
+            .put("synthesisMode", config.synthesisMode.value)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key(create = true))
         val encrypted = cipher.iv + cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
@@ -116,7 +124,8 @@ class ConfigurationStore(context: Context) {
                     .put("prosody", JSONObject().put("speed", json.getDouble("speed"))),
             ))
         }
-        return EngineConfiguration(json.getString("apiKey"), voices, json.optString("defaultVoiceId"))
+        return EngineConfiguration(json.getString("apiKey"), voices, json.optString("defaultVoiceId"),
+            SynthesisMode.fromValue(json.optString("synthesisMode", SynthesisMode.HTTP.value)))
     }
 
     private fun key(create: Boolean): SecretKey {

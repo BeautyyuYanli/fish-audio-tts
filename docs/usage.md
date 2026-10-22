@@ -32,6 +32,15 @@ Each voice saves separately. You can add several profiles, including different s
 
 The key field clears after a successful save. Its saved-status message shows whether a key is stored. Leaving the field blank preserves the key; **Delete API key** removes it without removing your voices.
 
+## Choose a synthesis mode
+
+In **Global configuration → Synthesis mode**, choose **Original** or **Continuous**. The selection saves immediately and applies to subsequent system speech and previews. Existing installations keep **Original** until you change it; mode changes preserve your key, saved voices and unsaved voice edits.
+
+- **Original** generates each Android text segment independently over HTTP, using compressed Opus audio.
+- **Continuous** streams successive segments into one Fish WebSocket generation session with `condition_on_previous_chunks: true`. Each segment sends `flush`. After receiving audio, a gap of 500 ms without new audio ends that Android segment; the connection stays available for three idle minutes. It uses uncompressed mono PCM16 at 44.1 kHz, which consumes more data than Opus. The completion rule is approximate: a long generation/network pause can cut a segment short or place delayed speech in the next segment.
+
+Continuous context is reused only for the same calling app, saved voice, prefix and effective generation settings. Changing these, stopping speech, losing the connection or destroying the system service resets it. Switching back to Original closes a retained connection when the next request starts. Android or Fish may close a connection before the three-minute limit. Failed segments are not automatically replayed.
+
 ## Try the voice
 
 In **Preview**, select a saved voice and a language, enter some text, then press **Start preview**. **Stop preview** cancels the request and playback.
@@ -59,7 +68,7 @@ Expand a voice's **Advanced parameters**:
 
 - **Prefix text** is prepended exactly to every utterance, including previews. Add a trailing space or newline if you need a separator. Instructions and expression tags depend on the chosen Fish model.
 - **Generation parameters** accepts an optional JSON object with Fish's supported controls. For example, `{"temperature":0.6}` sets that value for this profile. Leave it blank to use upstream defaults. Save the voice after changing it.
-- The default audio transport is Opus with automatic bitrate. An optional `opus_bitrate` of `24000`, `32000`, `48000` or `64000` selects a fixed bitrate in bps; `-1000` selects automatic mode.
+- Original mode uses Opus with automatic bitrate. An optional `opus_bitrate` of `24000`, `32000`, `48000` or `64000` selects a fixed bitrate in bps; `-1000` selects automatic mode. Opus bitrate does not affect Continuous mode's PCM transport.
 
 Values supplied by Android take priority over a voice's parameters, followed by Fish's defaults for omitted values. Android normally supplies a speech rate, so use your reader's rate control to adjust reading speed. Nested settings such as `prosody.volume` are preserved when Android overrides `prosody.speed`.
 

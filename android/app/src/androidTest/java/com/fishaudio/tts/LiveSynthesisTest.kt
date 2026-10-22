@@ -110,6 +110,7 @@ class LiveSynthesisTest {
             store.saveVoices(original.voices)
             if (original.defaultVoiceId.isNotEmpty()) store.saveDefaultVoice(original.defaultVoiceId)
             if (original.apiKey.isNotBlank()) store.saveApiKey(original.apiKey)
+            store.saveSynthesisMode(original.synthesisMode)
         }
     }
 }

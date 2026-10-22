@@ -16,6 +16,7 @@ export interface Configuration {
   configured: boolean
   voices: VoiceProfile[]
   defaultVoiceId: string
+  synthesisMode: 'http' | 'continuous'
 }
 
 export interface PreviewStatus {
@@ -38,6 +39,7 @@ interface FishTtsPlugin {
   saveVoice(options: { voice: VoiceProfile }): Promise<SavedVoiceConfiguration>
   removeVoice(options: { voiceId: string }): Promise<Configuration>
   setDefaultVoice(options: { voiceId: string }): Promise<Configuration>
+  setSynthesisMode(options: { synthesisMode: Configuration['synthesisMode'] }): Promise<Configuration>
   getSynthesisModels(): Promise<{ models: string[] }>
   getOwnVoices(options: { pageNumber: number }): Promise<{ voices: OwnVoice[]; hasMore: boolean }>
   preview(options: { text: string; voiceId: string; language: string; speed: number }): Promise<void>

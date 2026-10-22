@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 class FishTtsService : TextToSpeechService() {
     private lateinit var store: ConfigurationStore
     private val synthesizer = FishSynthesizer()
+    private val liveSynthesizer = FishLiveSynthesizer()
     private val active = AtomicReference<SynthesisSession?>(null)
     @Volatile private var loadedLocale = Locale.US
 
@@ -59,6 +60,7 @@ class FishTtsService : TextToSpeechService() {
         active.set(session)
         try {
             val config = try { store.read() } catch (_: Exception) {
+                liveSynthesizer.stop()
                 callback.error(TextToSpeech.ERROR_SERVICE)
                 callback.done()
                 return
@@ -69,22 +71,30 @@ class FishTtsService : TextToSpeechService() {
                 if (locale != null && profile != null) profile to locale else null
             } else VoiceCatalog.selection(request.voiceName, config)
             if (!config.configured || selection == null) {
+                liveSynthesizer.stop()
                 callback.error(if (!config.configured) TextToSpeech.ERROR_NOT_INSTALLED_YET else TextToSpeech.ERROR_INVALID_REQUEST)
                 callback.done()
                 return
             }
             // Fish supports rate through prosody.speed; it has no documented pitch control.
-            synthesizer.synthesize(config.apiKey, selection.first, request.charSequenceText.toString(),
-                request.speechRate.takeIf { it > 0 }, selection.second.toLanguageTag(), session, callback)
+            if (config.synthesisMode == SynthesisMode.CONTINUOUS) {
+                liveSynthesizer.synthesize(config.apiKey, selection.first, request.charSequenceText.toString(),
+                    request.speechRate.takeIf { it > 0 }, selection.second.toLanguageTag(), request.callerUid, session, callback)
+            } else {
+                liveSynthesizer.stop()
+                synthesizer.synthesize(config.apiKey, selection.first, request.charSequenceText.toString(),
+                    request.speechRate.takeIf { it > 0 }, selection.second.toLanguageTag(), session, callback)
+            }
         } finally {
             active.compareAndSet(session, null)
         }
     }
 
-    override fun onStop() { active.get()?.cancel() }
+    override fun onStop() { active.get()?.cancel(); liveSynthesizer.stop() }
 
     override fun onDestroy() {
         onStop()
+        liveSynthesizer.close()
         super.onDestroy()
     }
 

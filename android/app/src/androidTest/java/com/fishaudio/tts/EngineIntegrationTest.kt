@@ -46,6 +46,7 @@ class EngineIntegrationTest {
         store.saveVoices(original.voices)
         if (original.defaultVoiceId.isNotEmpty()) store.saveDefaultVoice(original.defaultVoiceId)
         if (original.apiKey.isNotBlank()) store.saveApiKey(original.apiKey)
+        store.saveSynthesisMode(original.synthesisMode)
     }
 
     @Test fun engineAndDataHandlersAreDiscoverable() {
@@ -82,6 +83,32 @@ class EngineIntegrationTest {
         assertFalse(first.contentEquals(file.readBytes()))
         store.clear()
         assertFalse(file.exists())
+    }
+
+    @Test fun synthesisModePersistsAcrossIndependentSavesAndActivityRecreation() {
+        assertEquals(SynthesisMode.HTTP, store.read().synthesisMode)
+        store.saveVoices(listOf(profile()))
+        store.saveApiKey(testKey)
+        store.saveSynthesisMode(SynthesisMode.CONTINUOUS)
+        store.saveVoice(profile(label = "Edited"))
+        store.saveDefaultVoice("first")
+        store.saveApiKey("")
+        store.deleteApiKey()
+        assertEquals(SynthesisMode.CONTINUOUS, ConfigurationStore(context).read().synthesisMode)
+        store.saveApiKey(testKey)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("\"continuous\"", evaluate(scenario, "document.getElementById('synthesis-mode').value"))
+            evaluate(scenario, "document.querySelector('#global-configuration > summary').click()")
+            selectOption(scenario, "#synthesis-mode", "http")
+            awaitJs(scenario, "document.body.innerText.includes('Synthesis mode saved.')")
+            assertEquals(SynthesisMode.HTTP, store.read().synthesisMode)
+            assertEquals(testKey, store.read().apiKey)
+            assertEquals("Edited", store.read().voices.single().label)
+            scenario.recreate()
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("\"http\"", evaluate(scenario, "document.getElementById('synthesis-mode').value"))
+        }
     }
 
     @Test fun savedDefaultSurvivesIndependentSavesAndFallsBackWhenDeleted() {

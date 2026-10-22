@@ -116,6 +116,18 @@ class FishTtsPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setSynthesisMode(call: PluginCall) {
+        try {
+            val mode = SynthesisMode.fromValue(call.getString("synthesisMode") ?: "")
+            call.resolve(publicConfiguration(ConfigurationStore(context).saveSynthesisMode(mode)))
+        } catch (error: IllegalArgumentException) {
+            call.reject(error.message ?: "Invalid synthesis mode.")
+        } catch (_: Exception) {
+            call.reject("Unable to save the synthesis mode. Please try again.")
+        }
+    }
+
+    @PluginMethod
     fun getSynthesisModels(call: PluginCall) {
         queryCatalog(call, catalog.modelsCall()) { response -> JSObject().put("models", JSONArray(catalog.readModels(response))) }
     }
@@ -290,6 +302,7 @@ class FishTtsPlugin : Plugin() {
         .put("hasApiKey", config.apiKey.isNotBlank()).put("configured", config.configured)
         .put("voices", JSONArray(config.voices.map { it.toJson() }))
         .put("defaultVoiceId", config.defaultVoiceId)
+        .put("synthesisMode", config.synthesisMode.value)
 
     private fun errorMessage(code: Int): String = when (code) {
         TextToSpeech.ERROR_NETWORK_TIMEOUT -> "Fish Audio timed out. Check your connection and try again."

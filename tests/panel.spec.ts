@@ -7,6 +7,7 @@ interface Fixture {
   calls: { method: string; args: Record<string, unknown> }[]
   failSave: boolean
   failDefault: boolean
+  failMode: boolean
   failRemove: boolean
   catalogError: boolean
   emptyVoices: boolean
@@ -19,11 +20,11 @@ declare global { interface Window { panelFixture: Fixture } }
 async function loadPanel(page: Page) {
   await page.addInitScript(() => {
     const fixture: Fixture = window.panelFixture = {
-      config: { hasApiKey: true, configured: true, defaultVoiceId: 'first', voices: [
+      config: { hasApiKey: true, configured: true, defaultVoiceId: 'first', synthesisMode: 'http', voices: [
         { id: 'first', label: 'Reading voice', referenceId: 'reference-a', model: '', prefixText: '', parameters: { temperature: 0.4 } },
         { id: 'second', label: 'Narrator clone', referenceId: 'reference-b', model: 'drama-3', prefixText: '', parameters: {} },
       ] },
-      calls: [], failSave: false, failDefault: false, failRemove: false, catalogError: false, emptyVoices: false, delay: 150,
+      calls: [], failSave: false, failDefault: false, failMode: false, failRemove: false, catalogError: false, emptyVoices: false, delay: 150,
     }
     let sequence = 0
     const status: PreviewStatus = { state: 'idle', message: 'No preview yet.' }
@@ -32,7 +33,7 @@ async function loadPanel(page: Page) {
       fixture.config.configured = fixture.config.hasApiKey && fixture.config.voices.length > 0
       return structuredClone(fixture.config)
     }
-    const methods = ['getConfiguration', 'saveApiKey', 'deleteApiKey', 'saveVoice', 'removeVoice', 'setDefaultVoice', 'getSynthesisModels', 'getOwnVoices', 'getPreviewStatus', 'preview', 'stop', 'openTtsSettings', 'removeListener']
+    const methods = ['getConfiguration', 'saveApiKey', 'deleteApiKey', 'saveVoice', 'removeVoice', 'setDefaultVoice', 'setSynthesisMode', 'getSynthesisModels', 'getOwnVoices', 'getPreviewStatus', 'preview', 'stop', 'openTtsSettings', 'removeListener']
     Object.assign(window, {
       androidBridge: {},
       Capacitor: {
@@ -64,6 +65,10 @@ async function loadPanel(page: Page) {
           if (method === 'setDefaultVoice') {
             if (fixture.failDefault) throw new Error('Unable to save the default voice. Please try again.')
             fixture.config.defaultVoiceId = args.voiceId as string
+          }
+          if (method === 'setSynthesisMode') {
+            if (fixture.failMode) throw new Error('Unable to save the synthesis mode. Please try again.')
+            fixture.config.synthesisMode = args.synthesisMode as Configuration['synthesisMode']
           }
           if (method === 'saveApiKey') fixture.config.hasApiKey = true
           if (method === 'deleteApiKey') fixture.config.hasApiKey = false
@@ -200,6 +205,30 @@ test('pickers reverse upstream choices across pages, retry, and discard closed/a
   await expect(own).not.toHaveAttribute('open')
   await expect(own.locator('[data-option-value]')).toHaveCount(0)
   await expect(row.locator('[data-field=referenceId]')).toHaveValue('owned-reference-b')
+  expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0)
+})
+
+test('synthesis mode saves independently, retains drafts and rolls back on failure', async ({ page }) => {
+  await loadPanel(page)
+  await page.locator('[data-action=expand-voice]').first().click()
+  await page.locator('input[id^=label-]').first().fill('Unsaved voice label')
+  await page.locator('#global-configuration > summary').click()
+  await expect(page.locator('#synthesis-mode')).toHaveValue('http')
+  await page.locator('#api-key').fill('unsaved-example-key')
+  await page.locator('#synthesis-mode').selectOption('continuous')
+  await expect(page.getByText('Synthesis mode saved.', { exact: true })).toBeVisible()
+  await expect(page.locator('#synthesis-mode-help')).toContainText('500 ms')
+  await expect(page.locator('#api-key')).toHaveValue('unsaved-example-key')
+  await expect(page.locator('input[id^=label-]').first()).toHaveValue('Unsaved voice label')
+  expect(await page.evaluate(() => window.panelFixture.config.synthesisMode)).toBe('continuous')
+  expect(await page.evaluate(() => window.panelFixture.calls.filter((call) => call.method.startsWith('save')))).toHaveLength(0)
+  await page.evaluate(() => { window.panelFixture.failMode = true })
+  await page.locator('#synthesis-mode').selectOption('http')
+  await expect(page.getByText('Unable to save the synthesis mode. Please try again.', { exact: true })).toBeVisible()
+  await expect(page.locator('#synthesis-mode')).toHaveValue('continuous')
+  await page.evaluate(() => { window.panelFixture.failMode = false })
+  await page.locator('#synthesis-mode').selectOption('http')
+  await expect(page.locator('#synthesis-mode-help')).toContainText('independently')
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0)
 })
 
