@@ -13,6 +13,12 @@
 .disclosure::after { content: ''; flex: 0 0 auto; inline-size: var(--chevron-size); block-size: var(--chevron-size); margin-inline-end: var(--space-tight); border-inline-end: var(--focus-width) solid currentColor; border-block-end: var(--focus-width) solid currentColor; transform: rotate(45deg); }
 details[open] > .disclosure::after, .voice-toggle[aria-expanded=true]::after { transform: rotate(225deg); }
 .panel-body { padding: var(--space-none) var(--space-field) var(--space-field); }
+.switch-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-field); min-block-size: var(--control-min-height); margin: var(--space-none); cursor: pointer; }
+.switch-control { appearance: none; position: relative; flex: 0 0 auto; inline-size: var(--switch-width); block-size: var(--switch-height); margin: var(--space-none); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-switch); background: var(--color-disabled); cursor: pointer; }
+.switch-control::before { content: ''; position: absolute; inset-block-start: calc((var(--switch-height) - var(--switch-thumb-size)) / 2 - var(--border-width)); inset-inline-start: calc(var(--space-tight) - var(--border-width)); inline-size: var(--switch-thumb-size); block-size: var(--switch-thumb-size); border-radius: var(--radius-switch); background: var(--color-text-secondary); }
+.switch-control:checked { border-color: var(--color-action); background: var(--color-action); }
+.switch-control:checked::before { inset-inline-start: calc(var(--switch-width) - var(--switch-thumb-size) - var(--space-tight) - var(--border-width)); background: var(--color-on-action); }
+.switch-control:disabled { opacity: var(--opacity-disabled); }
 .fields td { padding-block-end: var(--space-field); }
 .fields tr:last-child td { padding-block-end: var(--space-none); }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-small); min-block-size: var(--control-min-height); padding: var(--space-control) var(--space-field); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface); font-weight: var(--weight-control); text-align: center; text-decoration: none; }

@@ -32,9 +32,13 @@ Each voice saves separately. You can add several profiles, including different s
 
 The key field clears after a successful save. Its saved-status message shows whether a key is stored. Leaving the field blank preserves the key; **Delete API key** removes it without removing your voices.
 
+In **Global configuration**, **Use system language** is a switch that defaults to off (`unset`). When off, it ignores the system language and any voice's `language` parameter and sends `"language":""` to Fish Audio. Turn it on to forward Android's selected language. Changes save immediately and apply to all voices and previews, including speech with the panel closed.
+
 ## Try the voice
 
 In **Preview**, select a saved voice and a language, enter some text, then press **Start preview**. **Stop preview** cancels the request and playback.
+
+The preview **Language** choice is disabled while **Use system language** is off. Turn the switch on to choose a preview language; switching it off preserves the selection for later.
 
 **Speed** ranges from 0.5 to 2.0; 1.0 is normal speed. Pitch adjustment is unavailable. The Preview voice selection affects this preview only; the radio in **Voice list** chooses the system default.
 
@@ -61,7 +65,7 @@ Expand a voice's **Advanced parameters**:
 - **Generation parameters** accepts an optional JSON object with Fish's supported controls. For example, `{"temperature":0.6}` sets that value for this profile. Leave it blank to use upstream defaults. Save the voice after changing it.
 - The default audio transport is Opus with automatic bitrate. An optional `opus_bitrate` of `24000`, `32000`, `48000` or `64000` selects a fixed bitrate in bps; `-1000` selects automatic mode.
 
-Values supplied by Android take priority over a voice's parameters, followed by Fish's defaults for omitted values. Android normally supplies a speech rate, so use your reader's rate control to adjust reading speed. Nested settings such as `prosody.volume` are preserved when Android overrides `prosody.speed`.
+Values supplied by Android take priority over a voice's parameters, followed by Fish's defaults for omitted values. With **Use system language** off, the language is always sent empty. Android normally supplies a speech rate, so use your reader's rate control to adjust reading speed. Nested settings such as `prosody.volume` are preserved when Android overrides `prosody.speed`.
 
 See [Fish Audio's generation parameters](https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech) for controls supported by your chosen model.
 

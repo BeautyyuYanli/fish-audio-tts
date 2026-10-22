@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { PluginListenerHandle } from '@capacitor/core'
 import { FishTts, nativeAvailable } from './native'
-import type { Configuration, PreviewStatus, VoiceProfile } from './native'
+import type { Configuration, LanguageMode, PreviewStatus, VoiceProfile } from './native'
 import RemotePicker from './RemotePicker.vue'
 import OpenSourceLicenses from './OpenSourceLicenses.vue'
 import { loadOwnVoices, loadSynthesisModels } from './catalog'
@@ -28,6 +28,10 @@ const hasApiKey = ref(false)
 const globalOpen = ref(false)
 const keyMessage = ref('')
 const keyError = ref(false)
+const globalLanguage = ref<LanguageMode>('unset')
+const savedGlobalLanguage = ref<LanguageMode>('unset')
+const languageMessage = ref('')
+const languageError = ref(false)
 const savedVoices = ref<VoiceProfile[]>([])
 const defaultVoiceId = ref('')
 const defaultSelection = ref('')
@@ -94,6 +98,8 @@ function makeDraft(profile?: VoiceProfile): VoiceDraft {
 function applyConfiguration(config: Configuration) {
   if (disposed) return
   hasApiKey.value = config.hasApiKey
+  savedGlobalLanguage.value = config.language
+  globalLanguage.value = config.language
   savedVoices.value = config.voices
   defaultVoiceId.value = config.defaultVoiceId
   defaultSelection.value = config.defaultVoiceId
@@ -129,6 +135,22 @@ async function deleteApiKey() {
     keyMessage.value = 'API key deleted. Saved voices were preserved.'
   } catch (error) { keyError.value = true; keyMessage.value = errorText(error) }
   finally { mutationBusy.value = false }
+}
+
+/** Language saves immediately and independently of the key and all voice drafts; failures roll back. */
+async function saveLanguage() {
+  if (mutationDisabled.value) return
+  mutationBusy.value = true
+  languageError.value = false
+  languageMessage.value = 'Saving global language...'
+  try {
+    applyConfiguration(await FishTts.saveLanguage({ language: globalLanguage.value }))
+    if (disposed) return
+    languageMessage.value = 'Global language saved.'
+  } catch (error) {
+    globalLanguage.value = savedGlobalLanguage.value
+    languageError.value = true; languageMessage.value = errorText(error)
+  } finally { mutationBusy.value = false }
 }
 
 function addVoice() {
@@ -263,6 +285,15 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
         </div>
         <p v-if="keyMessage" class="notice" :class="{ error: keyError, success: !keyError }" :role="keyError ? 'alert' : 'status'">{{ keyMessage }}</p>
       </form>
+      <div class="panel-body">
+        <label class="switch-field" for="global-language">
+          <span>Use system language</span>
+          <input id="global-language" v-model="globalLanguage" class="switch-control" type="checkbox" role="switch" true-value="system" false-value="unset"
+            :disabled="mutationDisabled" aria-describedby="global-language-help" @change="saveLanguage" />
+        </label>
+        <p id="global-language-help" class="helper">{{ globalLanguage === 'system' ? 'On: send the system language.' : 'Off (unset): send an empty language.' }} Saves automatically for all voices and previews.</p>
+        <p v-if="languageMessage" class="notice" :class="{ error: languageError, success: !languageError }" :role="languageError ? 'alert' : 'status'">{{ languageMessage }}</p>
+      </div>
     </details>
 
     <section class="section" aria-labelledby="voices-heading">
@@ -328,7 +359,7 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
       <div class="action-stack"><button id="add-voice" class="button button-block" type="button" :disabled="loading || active || voices.length >= 50" @click="addVoice">Add voice</button></div>
       <details class="rules">
         <summary class="disclosure">Generation rules</summary>
-        <p class="helper">System values override table values. Nested prosody values are merged. Omitted values use upstream defaults.</p>
+        <p class="helper">System values override table values. Turn off Use system language to send an empty language instead. Nested prosody values are merged. Omitted values use upstream defaults.</p>
         <p class="helper">Android supplies a speech rate, including its default. Pitch adjustment is unavailable; Android controls playback volume.</p>
         <p class="helper">Speech text is sent to Fish Audio using your saved key. Audio is streamed using Opus with automatic bitrate by default and decoded to 48,000 Hz mono PCM16. Set opus_bitrate in generation parameters to change the bitrate.</p>
         <p class="helper">Do not put text, reference_id, references, model, format or sample_rate in generation parameters.</p>
@@ -347,7 +378,8 @@ onUnmounted(() => { disposed = true; apiKey.value = ''; void listener?.remove() 
           </select><p class="helper">For this preview only.</p>
         </td></tr>
         <tr><td><label for="preview-language">Language</label>
-          <select id="preview-language" v-model="language" :disabled="active"><option v-for="entry in languages" :key="entry[0]" :value="entry[0]">{{ entry[1] }} ({{ entry[0] }})</option></select>
+          <select id="preview-language" v-model="language" :disabled="active || globalLanguage === 'unset'" aria-describedby="preview-language-help"><option v-for="entry in languages" :key="entry[0]" :value="entry[0]">{{ entry[1] }} ({{ entry[0] }})</option></select>
+          <p id="preview-language-help" class="helper">{{ globalLanguage === 'unset' ? 'Ignored while Use system language is off.' : 'For this preview only.' }}</p>
         </td></tr>
         <tr><td><label for="preview-text">Text</label><textarea id="preview-text" v-model="text" rows="4" maxlength="4000" :disabled="active" /></td></tr>
       </tbody></table>

@@ -20,7 +20,7 @@ fieldset { min-inline-size: 0; margin: var(--space-none); padding: var(--space-n
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 summary::marker { content: ''; }
-input:not([type=radio]), select, textarea {
+input:not([type=radio]):not([type=checkbox]), select, textarea {
   display: block;
   inline-size: 100%;
   min-block-size: var(--control-min-height);

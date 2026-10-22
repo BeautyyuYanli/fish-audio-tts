@@ -26,7 +26,9 @@ The base layer supplies system typography, labeled inputs, selects, textareas, n
 
 The native store applies each change to its latest encrypted configuration inside a short local read/write lock. Key saves, default selection and row removal preserve unrelated drafts. Errors keep local edits. Default selection has a pending radio value separate from the confirmed Default badge and rolls back on failure. Dirty/new non-default rows must be saved before selecting them. The currently saved default remains effective while its draft changes.
 
-Preview uses a saved profile. A dirty selected profile must be saved; an unrelated draft does not block it. The global key remains write-only across the bridge and is never part of CSS, token files, browser storage or the build configuration.
+The **Use system language** switch uses a native checkbox with the switch role and a labeled 48 px touch target. It defaults to off (`unset`), sending an empty language for all voices and previews; on (`system`) follows Android's language. Changes save immediately without submitting the key or voice drafts, and failures roll back to the saved choice. Text describes both states alongside the visual switch.
+
+Preview uses a saved profile. Its Language field is disabled while **Use system language** is off and retains the selected locale for when the switch is turned on. A dirty selected profile must be saved; an unrelated draft does not block it. The global key remains write-only across the bridge and is never part of CSS, token files, browser storage or the build configuration.
 
 ## Verification
 

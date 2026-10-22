@@ -74,8 +74,9 @@ class FishTtsService : TextToSpeechService() {
                 return
             }
             // Fish supports rate through prosody.speed; it has no documented pitch control.
+            val language = if (config.language == "unset") "" else selection.second.toLanguageTag()
             synthesizer.synthesize(config.apiKey, selection.first, request.charSequenceText.toString(),
-                request.speechRate.takeIf { it > 0 }, selection.second.toLanguageTag(), session, callback)
+                request.speechRate.takeIf { it > 0 }, language, session, callback)
         } finally {
             active.compareAndSet(session, null)
         }

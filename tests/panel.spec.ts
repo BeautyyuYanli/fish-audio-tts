@@ -8,6 +8,7 @@ interface Fixture {
   failSave: boolean
   failDefault: boolean
   failRemove: boolean
+  failLanguage: boolean
   catalogError: boolean
   emptyVoices: boolean
   delay: number
@@ -19,11 +20,11 @@ declare global { interface Window { panelFixture: Fixture } }
 async function loadPanel(page: Page) {
   await page.addInitScript(() => {
     const fixture: Fixture = window.panelFixture = {
-      config: { hasApiKey: true, configured: true, defaultVoiceId: 'first', voices: [
+      config: { hasApiKey: true, configured: true, defaultVoiceId: 'first', language: 'unset', voices: [
         { id: 'first', label: 'Reading voice', referenceId: 'reference-a', model: '', prefixText: '', parameters: { temperature: 0.4 } },
         { id: 'second', label: 'Narrator clone', referenceId: 'reference-b', model: 'drama-3', prefixText: '', parameters: {} },
       ] },
-      calls: [], failSave: false, failDefault: false, failRemove: false, catalogError: false, emptyVoices: false, delay: 150,
+      calls: [], failSave: false, failDefault: false, failRemove: false, failLanguage: false, catalogError: false, emptyVoices: false, delay: 150,
     }
     let sequence = 0
     const status: PreviewStatus = { state: 'idle', message: 'No preview yet.' }
@@ -32,7 +33,7 @@ async function loadPanel(page: Page) {
       fixture.config.configured = fixture.config.hasApiKey && fixture.config.voices.length > 0
       return structuredClone(fixture.config)
     }
-    const methods = ['getConfiguration', 'saveApiKey', 'deleteApiKey', 'saveVoice', 'removeVoice', 'setDefaultVoice', 'getSynthesisModels', 'getOwnVoices', 'getPreviewStatus', 'preview', 'stop', 'openTtsSettings', 'removeListener']
+    const methods = ['getConfiguration', 'saveApiKey', 'deleteApiKey', 'saveLanguage', 'saveVoice', 'removeVoice', 'setDefaultVoice', 'getSynthesisModels', 'getOwnVoices', 'getPreviewStatus', 'preview', 'stop', 'openTtsSettings', 'removeListener']
     Object.assign(window, {
       androidBridge: {},
       Capacitor: {
@@ -64,6 +65,10 @@ async function loadPanel(page: Page) {
           if (method === 'setDefaultVoice') {
             if (fixture.failDefault) throw new Error('Unable to save the default voice. Please try again.')
             fixture.config.defaultVoiceId = args.voiceId as string
+          }
+          if (method === 'saveLanguage') {
+            if (fixture.failLanguage) throw new Error('Unable to save the global language. Please try again.')
+            fixture.config.language = args.language as Configuration['language']
           }
           if (method === 'saveApiKey') fixture.config.hasApiKey = true
           if (method === 'deleteApiKey') fixture.config.hasApiKey = false
@@ -203,6 +208,45 @@ test('pickers reverse upstream choices across pages, retry, and discard closed/a
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0)
 })
 
+test('global language saves independently of drafts and rolls back failed changes', async ({ page }) => {
+  await loadPanel(page)
+  const row = await editor(page, 0)
+  await row.locator('input[id^=label-]').fill('Keep this voice draft')
+  const global = page.locator('#global-configuration')
+  await global.locator(':scope > summary').click()
+  await page.locator('#api-key').fill('unsaved-test-key')
+  const languageSwitch = page.getByRole('switch', { name: 'Use system language' })
+  await expect(languageSwitch).not.toBeChecked()
+  await expect(page.locator('#preview-language')).toBeDisabled()
+  await expect(page.locator('#global-language-help')).toContainText('Off (unset)')
+  await page.evaluate(() => { window.panelFixture.failLanguage = true })
+  await languageSwitch.check()
+  await expect(global.getByRole('alert')).toContainText('Unable to save the global language')
+  await expect(languageSwitch).not.toBeChecked()
+  await expect(page.locator('#preview-language')).toBeDisabled()
+  expect(await page.evaluate(() => window.panelFixture.config.language)).toBe('unset')
+  await page.evaluate(() => { window.panelFixture.failLanguage = false; window.panelFixture.delay = 400 })
+  await languageSwitch.check()
+  await expect(languageSwitch).toBeDisabled()
+  await expect(global.getByRole('status')).toHaveText('Global language saved.')
+  expect(await page.evaluate(() => window.panelFixture.config.language)).toBe('system')
+  await expect(page.locator('#preview-language')).toBeEnabled()
+  await page.locator('#preview-language').selectOption('ja-JP')
+  await expect(page.locator('#api-key')).toHaveValue('unsaved-test-key')
+  await expect(row.locator('input[id^=label-]')).toHaveValue('Keep this voice draft')
+  expect(await page.evaluate(() => window.panelFixture.config.voices[0]?.label)).toBe('Reading voice')
+  await page.locator('#save-api-key').click()
+  await expect(global).toContainText('API key saved in protected native storage.')
+  await expect(languageSwitch).toBeChecked()
+  await languageSwitch.focus()
+  await page.keyboard.press('Space')
+  await expect(global.getByText('Global language saved.', { exact: true })).toBeVisible()
+  await expect(languageSwitch).not.toBeChecked()
+  await expect(page.locator('#preview-language')).toBeDisabled()
+  await expect(page.locator('#preview-language')).toHaveValue('ja-JP')
+  expect(await page.evaluate(() => window.panelFixture.config.language)).toBe('unset')
+})
+
 test('active preview disables Start and editing while allowing Stop', async ({ page }) => {
   await loadPanel(page)
   await page.locator('#start-preview').click()
@@ -210,6 +254,7 @@ test('active preview disables Start and editing while allowing Stop', async ({ p
   await expect(page.locator('#start-preview')).toBeDisabled()
   await expect(page.locator('#preview-text')).toBeDisabled()
   await expect(page.locator('#preview-pitch')).toBeDisabled()
+  await expect(page.locator('#global-language')).toBeDisabled()
   await page.locator('#stop-preview').click()
   await expect(page.locator('#preview-text')).toBeEnabled()
   await expect(page.locator('#stop-preview')).toBeDisabled()
@@ -267,6 +312,7 @@ for (const width of [320, 360, 390, 412, 1280]) {
     const runtimeErrors: string[] = []
     page.on('pageerror', (error) => runtimeErrors.push(error.message))
     await loadPanel(page)
+    await page.locator('#global-configuration > summary').click()
     await page.screenshot({ path: testInfo.outputPath('overview.png'), fullPage: true })
     const row = await editor(page, 0)
     await row.locator('input[id^=label-]').fill('A'.repeat(100))

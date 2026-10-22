@@ -11,11 +11,14 @@ export interface VoiceProfile {
   parameters: Record<string, unknown>
 }
 
+export type LanguageMode = 'system' | 'unset'
+
 export interface Configuration {
   hasApiKey: boolean
   configured: boolean
   voices: VoiceProfile[]
   defaultVoiceId: string
+  language: LanguageMode
 }
 
 export interface PreviewStatus {
@@ -35,6 +38,7 @@ interface FishTtsPlugin {
   getConfiguration(): Promise<Configuration>
   saveApiKey(options: { apiKey: string }): Promise<Configuration>
   deleteApiKey(): Promise<Configuration>
+  saveLanguage(options: { language: LanguageMode }): Promise<Configuration>
   saveVoice(options: { voice: VoiceProfile }): Promise<SavedVoiceConfiguration>
   removeVoice(options: { voiceId: string }): Promise<Configuration>
   setDefaultVoice(options: { voiceId: string }): Promise<Configuration>

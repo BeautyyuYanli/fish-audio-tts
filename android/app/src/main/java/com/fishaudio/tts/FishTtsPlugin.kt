@@ -76,6 +76,18 @@ class FishTtsPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun saveLanguage(call: PluginCall) {
+        try {
+            val language = call.getString("language") ?: throw IllegalArgumentException("Select a global language option.")
+            call.resolve(publicConfiguration(ConfigurationStore(context).saveLanguage(language)))
+        } catch (error: IllegalArgumentException) {
+            call.reject(error.message ?: "Invalid global language.")
+        } catch (_: Exception) {
+            call.reject("Unable to save the global language. Please try again.")
+        }
+    }
+
+    @PluginMethod
     fun saveVoice(call: PluginCall) {
         try {
             val json = call.getObject("voice") ?: throw IllegalArgumentException("Provide a voice profile.")
@@ -290,6 +302,7 @@ class FishTtsPlugin : Plugin() {
         .put("hasApiKey", config.apiKey.isNotBlank()).put("configured", config.configured)
         .put("voices", JSONArray(config.voices.map { it.toJson() }))
         .put("defaultVoiceId", config.defaultVoiceId)
+        .put("language", config.language)
 
     private fun errorMessage(code: Int): String = when (code) {
         TextToSpeech.ERROR_NETWORK_TIMEOUT -> "Fish Audio timed out. Check your connection and try again."
