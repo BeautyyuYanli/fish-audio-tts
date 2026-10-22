@@ -46,6 +46,7 @@ class FishSynthesizer(
         .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build(),
     private val endpoint: HttpUrl = "https://api.fish.audio/v1/tts".toHttpUrl(),
 ) {
+    /** Null language preserves profile parameters; an explicit empty language overrides them. */
     fun synthesize(apiKey: String, profile: VoiceProfile, text: String, speechRate: Int?, language: String?,
                    session: SynthesisSession, callback: SynthesisCallback) {
         try {
@@ -59,7 +60,7 @@ class FishSynthesizer(
                 .put("format", "opus").put("sample_rate", OggOpusReader.SAMPLE_RATE)
             // Let Fish choose omitted bitrates; preserve a profile's explicit bitrate.
             if (!body.has("opus_bitrate")) body.put("opus_bitrate", -1000)
-            if (!language.isNullOrBlank()) body.put("language", language)
+            if (language != null) body.put("language", language)
             if (speechRate != null) {
                 val prosody = body.optJSONObject("prosody") ?: JSONObject()
                 prosody.put("speed", speechRate / 100.0)

@@ -114,6 +114,7 @@ class FishLiveSynthesizer(
         }
     }
 
+    /** Null language preserves profile parameters; an explicit empty language overrides them. */
     fun synthesize(apiKey: String, profile: VoiceProfile, text: String, speechRate: Int?, language: String?,
                    callerUid: Int, session: SynthesisSession, callback: SynthesisCallback) {
         var current: Connection? = null
@@ -124,7 +125,7 @@ class FishLiveSynthesizer(
             if (text.isBlank() || text.length > 4000) throw SynthesisFailure(TextToSpeech.ERROR_INVALID_REQUEST)
             val parameters = JSONObject(profile.parameters.toString()).put("text", "").put("reference_id", profile.referenceId)
                 .put("format", "pcm").put("sample_rate", SAMPLE_RATE).put("condition_on_previous_chunks", true)
-            if (!language.isNullOrBlank()) parameters.put("language", language)
+            if (language != null) parameters.put("language", language)
             if (speechRate != null) {
                 val prosody = parameters.optJSONObject("prosody") ?: JSONObject()
                 parameters.put("prosody", prosody.put("speed", speechRate / 100.0))

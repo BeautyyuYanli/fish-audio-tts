@@ -40,6 +40,10 @@
   --control-min-height: var(--primitive-space-12);
   --numeric-min-width: var(--primitive-size-32);
   --radio-size: var(--primitive-size-5);
+  --switch-width: var(--primitive-space-12);
+  --switch-height: var(--primitive-space-8);
+  --switch-thumb-size: var(--primitive-space-6);
+  --radius-switch: var(--primitive-radius-round);
   --chevron-size: var(--primitive-space-2);
   --radius-control: var(--primitive-radius-2);
   --radius-panel: var(--primitive-radius-3);

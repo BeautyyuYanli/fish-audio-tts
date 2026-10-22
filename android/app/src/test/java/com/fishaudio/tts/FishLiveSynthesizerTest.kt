@@ -122,6 +122,25 @@ class FishLiveSynthesizerTest {
         assertFalse(profile.parameters.getBoolean("condition_on_previous_chunks"))
     }
 
+    @Test fun languageChangesStartNewContextsAndExplicitEmptyOverridesTheProfile() {
+        val json = profile.toJson()
+        json.getJSONObject("parameters").put("language", "ja-JP")
+        val selected = VoiceProfile.fromJson(json)
+        val client = synthesizer()
+        for ((language, expected) in listOf("en-US" to "en-US", "" to "", null to "ja-JP")) {
+            val peer = peer()
+            val callback = PcmCallback()
+            client.synthesize("fixture-key", selected, "Hello.", 120, language, 10, SynthesisSession(), callback)
+            val start = peer.next()
+            assertEquals("start", start.getString("event"))
+            assertEquals(expected, start.getJSONObject("request").getString("language"))
+            assertArrayEquals(pcm, callback.audio.toByteArray())
+            assertTrue(callback.errors.isEmpty())
+            assertEquals("ja-JP", selected.parameters.getString("language"))
+        }
+        assertEquals(3, server.requestCount)
+    }
+
     @Test fun waitsFor500MsAfterTheLastAudioAndReassemblesSplitPcmSamples() {
         val peer = peer {
             it.audio(pcm.copyOfRange(0, 3))

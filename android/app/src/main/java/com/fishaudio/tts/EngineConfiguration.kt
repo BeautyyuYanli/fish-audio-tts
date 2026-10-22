@@ -52,13 +52,23 @@ enum class SynthesisMode(val value: String) {
     }
 }
 
-/** The saved default uses stable profile identity; old configurations retain independent HTTP synthesis. */
+/**
+ * The saved default uses stable profile identity; old configurations and deleted defaults use the first remaining voice.
+ * Synthesis defaults to independent HTTP; continuous mode is explicitly selected.
+ * Language is unset by default, sending an empty upstream language for every profile and preview.
+ * The system option explicitly forwards Android's language.
+ */
 class EngineConfiguration(
     val apiKey: String = "",
     val voices: List<VoiceProfile> = emptyList(),
     preferredVoiceId: String = "",
     val synthesisMode: SynthesisMode = SynthesisMode.HTTP,
+    val language: String = "unset",
 ) {
+    init {
+        require(language == "system" || language == "unset") { "Select system or unset for the global language." }
+    }
+
     val defaultVoice: VoiceProfile? = voices.firstOrNull { it.id == preferredVoiceId } ?: voices.firstOrNull()
     val defaultVoiceId: String get() = defaultVoice?.id.orEmpty()
     val configured: Boolean get() = apiKey.isNotBlank() && voices.isNotEmpty()

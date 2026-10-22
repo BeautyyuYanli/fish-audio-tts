@@ -157,6 +157,20 @@ class FishSynthesizerTest {
         assertFalse(body.has("top_p"))
     }
 
+    @Test fun explicitEmptyLanguageOverridesProfilesAndIsSentUpstream() {
+        for (selected in listOf(profile, VoiceProfile("no-language", "", profile.referenceId))) {
+            val original = selected.toJson().toString()
+            enqueue(opus())
+            val callback = RecordingCallback()
+            synthesizer().synthesize(config.apiKey, selected, "Unset language.", 100, "", SynthesisSession(), callback)
+            val body = JSONObject(server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8())
+            assertEquals("", body.getString("language"))
+            assertEquals(original, selected.toJson().toString())
+            assertTrue("Synthesis errors: ${callback.errors}", callback.errors.isEmpty())
+            assertEquals(1, callback.doneCount)
+        }
+    }
+
     @Test fun selectedProfilesRouteTheirOwnReferenceAndGenerationParameters() {
         val other = VoiceProfile("profile-two", "Second", "9a9cf47702da476aa4629e2506d4a857",
             parameters = JSONObject().put("temperature", 0.9), prefixText = "[bright] ")

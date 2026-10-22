@@ -26,12 +26,17 @@ class ConfigurationStore(context: Context) {
 
     fun read(): EngineConfiguration = synchronized(lock) { readLocked() }
 
-    /** Key and profile forms save independently, preserving the other form's persisted data. */
+    /** Key, language, synthesis mode and profile changes preserve each other's persisted data. */
     fun saveApiKey(apiKey: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         val value = apiKey.trim().ifEmpty { previous.apiKey }
         require(value.matches(Regex("[!-~]{1,4096}"))) { "Enter a valid Fish Audio API key without spaces." }
-        writeLocked(EngineConfiguration(value, previous.voices, previous.defaultVoiceId, previous.synthesisMode))
+        writeLocked(EngineConfiguration(value, previous.voices, previous.defaultVoiceId, previous.synthesisMode, previous.language))
+    }
+
+    fun saveLanguage(language: String): EngineConfiguration = synchronized(lock) {
+        val previous = readLocked()
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, previous.defaultVoiceId, previous.synthesisMode, language))
     }
 
     fun saveVoices(voices: List<VoiceProfile>): EngineConfiguration = synchronized(lock) {
@@ -39,7 +44,7 @@ class ConfigurationStore(context: Context) {
         voices.forEach { it.validate() }
         require(voices.map { it.id }.distinct().size == voices.size) { "Voice profile IDs must be unique." }
         val previous = readLocked()
-        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode))
+        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode, previous.language))
     }
 
     /** Read-modify-write by stable profile ID; never accept another editor's draft snapshot. */
@@ -50,32 +55,33 @@ class ConfigurationStore(context: Context) {
         require(index >= 0 || previous.voices.size < 50) { "Save at most 50 voice profiles." }
         val voices = previous.voices.toMutableList()
         if (index >= 0) voices[index] = voice else voices.add(voice)
-        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode))
+        writeLocked(EngineConfiguration(previous.apiKey, voices, previous.defaultVoiceId, previous.synthesisMode, previous.language))
     }
 
     /** Removal affects one persisted profile; EngineConfiguration supplies the default fallback. */
     fun removeVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         require(previous.voices.any { it.id == voiceId }) { "Select a saved voice to remove." }
-        writeLocked(EngineConfiguration(previous.apiKey, previous.voices.filterNot { it.id == voiceId }, previous.defaultVoiceId, previous.synthesisMode))
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices.filterNot { it.id == voiceId }, previous.defaultVoiceId,
+            previous.synthesisMode, previous.language))
     }
 
     fun saveDefaultVoice(voiceId: String): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         require(previous.voices.any { it.id == voiceId }) { "Select a saved voice as the system default." }
-        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, voiceId, previous.synthesisMode))
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, voiceId, previous.synthesisMode, previous.language))
     }
 
     /** Mode selection is independent of the write-only key and individual voice editors. */
     fun saveSynthesisMode(mode: SynthesisMode): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
-        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, previous.defaultVoiceId, mode))
+        writeLocked(EngineConfiguration(previous.apiKey, previous.voices, previous.defaultVoiceId, mode, previous.language))
     }
 
     fun deleteApiKey(): EngineConfiguration = synchronized(lock) {
         val previous = readLocked()
         writeLocked(EngineConfiguration(voices = previous.voices, preferredVoiceId = previous.defaultVoiceId,
-            synthesisMode = previous.synthesisMode))
+            synthesisMode = previous.synthesisMode, language = previous.language))
     }
 
     private fun writeLocked(config: EngineConfiguration): EngineConfiguration {
@@ -83,6 +89,7 @@ class ConfigurationStore(context: Context) {
             .put("voices", JSONArray(config.voices.map { it.toJson() }))
             .put("defaultVoiceId", config.defaultVoiceId)
             .put("synthesisMode", config.synthesisMode.value)
+            .put("language", config.language)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key(create = true))
         val encrypted = cipher.iv + cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
@@ -124,8 +131,10 @@ class ConfigurationStore(context: Context) {
                     .put("prosody", JSONObject().put("speed", json.getDouble("speed"))),
             ))
         }
+        // The legacy single-voice language belongs to that profile, not the global language mode.
+        val language = if (json.has("voices")) json.optString("language", "unset") else "unset"
         return EngineConfiguration(json.getString("apiKey"), voices, json.optString("defaultVoiceId"),
-            SynthesisMode.fromValue(json.optString("synthesisMode", SynthesisMode.HTTP.value)))
+            SynthesisMode.fromValue(json.optString("synthesisMode", SynthesisMode.HTTP.value)), language)
     }
 
     private fun key(create: Boolean): SecretKey {

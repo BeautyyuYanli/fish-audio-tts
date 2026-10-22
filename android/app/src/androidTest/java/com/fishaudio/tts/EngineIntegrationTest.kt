@@ -44,6 +44,7 @@ class EngineIntegrationTest {
     @After fun tearDown() {
         store.clear()
         store.saveVoices(original.voices)
+        store.saveLanguage(original.language)
         if (original.defaultVoiceId.isNotEmpty()) store.saveDefaultVoice(original.defaultVoiceId)
         if (original.apiKey.isNotBlank()) store.saveApiKey(original.apiKey)
         store.saveSynthesisMode(original.synthesisMode)
@@ -89,6 +90,7 @@ class EngineIntegrationTest {
         assertEquals(SynthesisMode.HTTP, store.read().synthesisMode)
         store.saveVoices(listOf(profile()))
         store.saveApiKey(testKey)
+        store.saveLanguage("system")
         store.saveSynthesisMode(SynthesisMode.CONTINUOUS)
         store.saveVoice(profile(label = "Edited"))
         store.saveDefaultVoice("first")
@@ -103,12 +105,47 @@ class EngineIntegrationTest {
             selectOption(scenario, "#synthesis-mode", "http")
             awaitJs(scenario, "document.body.innerText.includes('Synthesis mode saved.')")
             assertEquals(SynthesisMode.HTTP, store.read().synthesisMode)
+            assertEquals("system", store.read().language)
             assertEquals(testKey, store.read().apiKey)
             assertEquals("Edited", store.read().voices.single().label)
             scenario.recreate()
             awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
             assertEquals("\"http\"", evaluate(scenario, "document.getElementById('synthesis-mode').value"))
         }
+    }
+
+    @Test fun globalLanguagePersistsAcrossIndependentMutations() {
+        assertEquals("unset", store.read().language)
+        store.saveSynthesisMode(SynthesisMode.CONTINUOUS)
+        store.saveLanguage("unset")
+        assertEquals("unset", ConfigurationStore(context).read().language)
+        val first = profile()
+        val second = profile("second")
+        store.saveApiKey(testKey)
+        store.saveVoices(listOf(first, second))
+        store.saveDefaultVoice(second.id)
+        store.saveVoice(profile(label = "Updated"))
+        store.saveApiKey("")
+        val saved = ConfigurationStore(context).read()
+        assertEquals("unset", saved.language)
+        assertEquals(SynthesisMode.CONTINUOUS, saved.synthesisMode)
+        assertEquals(testKey, saved.apiKey)
+        assertEquals(second.id, saved.defaultVoiceId)
+        store.saveLanguage("system")
+        val reset = store.read()
+        assertEquals("system", reset.language)
+        assertEquals(SynthesisMode.CONTINUOUS, reset.synthesisMode)
+        assertEquals(saved.apiKey, reset.apiKey)
+        assertEquals(saved.defaultVoiceId, reset.defaultVoiceId)
+        assertEquals(saved.voices.map { it.toJson().toString() }, reset.voices.map { it.toJson().toString() })
+        store.saveLanguage("unset")
+        store.removeVoice(first.id)
+        store.deleteApiKey()
+        assertEquals("unset", ConfigurationStore(context).read().language)
+        assertEquals(SynthesisMode.CONTINUOUS, store.read().synthesisMode)
+        assertEquals(second.id, store.read().defaultVoiceId)
+        assertThrows(IllegalArgumentException::class.java) { store.saveLanguage("en-US") }
+        assertEquals("unset", store.read().language)
     }
 
     @Test fun savedDefaultSurvivesIndependentSavesAndFallsBackWhenDeleted() {
@@ -323,6 +360,54 @@ class EngineIntegrationTest {
             awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
             assertEquals("true", evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].checked"))
             assertEquals(JSONObject.quote("drama-3"), evaluate(scenario, "document.querySelector('details[id^=model-] > summary').textContent.trim()"))
+        }
+    }
+
+    @Test fun vueGlobalLanguagePersistsAcrossActivityRecreationAndPreservesDrafts() {
+        store.saveVoices(listOf(profile(label = "Reading voice"), profile("second", secondReference, "Narrator")))
+        store.saveApiKey(testKey)
+        val captureScreenshots = InstrumentationRegistry.getArguments().getString("captureScreenshots") == "true"
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("false", evaluate(scenario, "document.getElementById('global-language').checked"))
+            assertEquals("true", evaluate(scenario, "document.getElementById('preview-language').disabled"))
+            expandVoice(scenario, 0)
+            openAdvanced(scenario, 0)
+            setInput(scenario, "textarea[data-field=parameters]", "invalid draft")
+            evaluate(scenario, "document.querySelector('#global-configuration > summary').click()")
+            setInput(scenario, "#api-key", testKey)
+            evaluate(scenario, "document.getElementById('global-language').click()")
+            awaitJs(scenario, "document.body.innerText.includes('Global language saved.')")
+            assertEquals("system", ConfigurationStore(context).read().language)
+            assertEquals(JSONObject.quote(testKey), evaluate(scenario, "document.getElementById('api-key').value"))
+            assertEquals(JSONObject.quote("invalid draft"), evaluate(scenario, "document.querySelector('textarea[data-field=parameters]').value"))
+            assertEquals(0.4, store.read().voices[0].parameters.getDouble("temperature"), 0.0)
+            evaluate(scenario, "document.querySelectorAll('[data-action=default-voice]')[1].click()")
+            awaitJs(scenario, "document.body.innerText.includes('Default system voice saved.')")
+            assertEquals("system", store.read().language)
+            scenario.recreate()
+            awaitJs(scenario, "document.body.innerText.includes('Configuration loaded.')")
+            assertEquals("true", evaluate(scenario, "document.getElementById('global-language').checked"))
+            assertEquals("false", evaluate(scenario, "document.getElementById('preview-language').disabled"))
+            evaluate(scenario, "document.querySelector('#global-configuration > summary').click()")
+            if (captureScreenshots) {
+                captureScreenshot("language-system.png")
+                evaluate(scenario, "document.getElementById('preview-heading').scrollIntoView()")
+                awaitJs(scenario, "document.getElementById('preview-heading').getBoundingClientRect().top < 100")
+                captureScreenshot("preview-language-system.png")
+                evaluate(scenario, "window.scrollTo(0, 0)")
+            }
+            evaluate(scenario, "document.getElementById('global-language').click()")
+            awaitJs(scenario, "document.body.innerText.includes('Global language saved.')")
+            assertEquals("unset", store.read().language)
+            assertEquals("true", evaluate(scenario, "document.getElementById('preview-language').disabled"))
+            if (captureScreenshots) {
+                captureScreenshot("language-unset.png")
+                evaluate(scenario, "document.getElementById('preview-heading').scrollIntoView()")
+                awaitJs(scenario, "document.getElementById('preview-heading').getBoundingClientRect().top < 100")
+                captureScreenshot("preview-language-unset.png")
+            }
+            assertEquals("second", store.read().defaultVoiceId)
         }
     }
 

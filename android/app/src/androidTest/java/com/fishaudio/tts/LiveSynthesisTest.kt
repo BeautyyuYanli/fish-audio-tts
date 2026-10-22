@@ -108,6 +108,7 @@ class LiveSynthesisTest {
             output.delete()
             store.clear()
             store.saveVoices(original.voices)
+            store.saveLanguage(original.language)
             if (original.defaultVoiceId.isNotEmpty()) store.saveDefaultVoice(original.defaultVoiceId)
             if (original.apiKey.isNotBlank()) store.saveApiKey(original.apiKey)
             store.saveSynthesisMode(original.synthesisMode)
